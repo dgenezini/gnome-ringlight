@@ -1,0 +1,7 @@
+{
+  "name": "Ring Light",
+  "description": "White 150px border around every monitor; maximized windows shrink to stay inside it.",
+  "uuid": "ringlight@daniel",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "version": 1
+}
