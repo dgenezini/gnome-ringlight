@@ -1,10 +1,16 @@
-## ADDED Requirements
+# camera-triggered-ring
+
+## Purpose
+
+Make the ring light up automatically while any camera is in use, instead of being always-on. (TBD: expand)
+
+## Requirements
 
 ### Requirement: Ring activates when camera turns on
-The extension SHALL show the ring when the XDG Camera portal reports any camera in use, and SHALL keep the ring visible while a camera is in use.
+The extension SHALL show the ring when mutter reports a camera in use, and SHALL keep the ring visible while a camera is in use.
 
 #### Scenario: Camera turns on while extension enabled
-- **WHEN** the camera in-use state reported by the `org.freedesktop.portal.Camera` portal changes to true
+- **WHEN** the camera in-use state reported by `Shell.CameraMonitor` (`cameras-in-use` property, same object GNOME Shell's camera indicator binds to) changes to true
 - **THEN** the extension builds the border strips on every monitor and registers them with `affectsStruts: true`
 
 #### Scenario: Maximized windows resize on activation
@@ -19,7 +25,7 @@ The extension SHALL show the ring when the XDG Camera portal reports any camera 
 The extension SHALL remove the ring when no camera is in use.
 
 #### Scenario: Last camera turns off
-- **WHEN** the camera in-use state reported by the portal changes to false
+- **WHEN** the camera in-use state changes to false
 - **THEN** the extension removes all border strips and restores the previous work area
 
 #### Scenario: Maximized windows restore on deactivation
@@ -37,20 +43,20 @@ While the ring is active, the extension SHALL keep the ring geometry in sync wit
 - **WHEN** monitors change while no camera is in use
 - **THEN** the extension does not build a ring
 
-### Requirement: Graceful fallback without camera portal
-If the camera portal is unavailable, the extension SHALL keep the ring visible permanently and log a warning.
+### Requirement: Graceful fallback without camera monitor
+If the camera monitor cannot be created, the extension SHALL keep the ring visible permanently and log a warning.
 
-#### Scenario: Portal missing or old
-- **WHEN** the `org.freedesktop.portal.Camera` interface cannot be resolved at enable time
+#### Scenario: CameraMonitor unavailable
+- **WHEN** `new Shell.CameraMonitor()` fails at enable time
 - **THEN** the extension shows the ring as before (always-on) and logs a warning explaining camera triggering is unavailable
 
 ### Requirement: Clean disable
-The extension SHALL fully remove the ring and all portal listeners on disable, regardless of camera state.
+The extension SHALL fully remove the ring and all camera monitor listeners on disable, regardless of camera state.
 
 #### Scenario: Extension disabled while camera in use
 - **WHEN** the extension is disabled while the ring is active
-- **THEN** all border strips are removed, portal signals are disconnected, and the work area is restored
+- **THEN** all border strips are removed, the camera monitor listener is disconnected, and the work area is restored
 
 #### Scenario: Extension disabled while inactive
 - **WHEN** the extension is disabled while no camera is in use
-- **THEN** no strips exist to remove and all portal listeners are disconnected
+- **THEN** no strips exist to remove and the camera monitor listener is disconnected

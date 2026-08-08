@@ -5,10 +5,10 @@ The extension currently draws the ring permanently while enabled, reserving 150p
 ## What Changes
 
 - Ring activation becomes camera-driven: borders appear when any camera turns on, disappear when the last camera turns off.
-- Camera state is monitored via the XDG Camera portal (`org.freedesktop.portal.Camera`), the same mechanism GNOME Shell uses for its camera indicator.
+- Camera state is monitored via mutter's `Shell.CameraMonitor` (`cameras-in-use` property) — the same object GNOME Shell's own camera indicator binds to.
 - When active, behavior is unchanged from today: struts shrink the work area so maximized/tiled windows on every workspace resize to stay inside the ring. Non-maximized windows are not touched.
 - `monitors-changed` still rebuilds the ring, but only while the ring is active.
-- Fallback: if the portal is unavailable, keep the current always-on behavior (logged), so no user silently loses the ring.
+- Fallback: if the camera monitor cannot be created, keep the current always-on behavior (logged), so no user silently loses the ring.
 
 ## Capabilities
 
@@ -21,5 +21,5 @@ The extension currently draws the ring permanently while enabled, reserving 150p
 ## Impact
 
 - `extension.js`: add camera state watcher, gate `_build()`/teardown on camera-in-use.
-- New D-Bus dependency: `org.freedesktop.portal.Desktop` / `org.freedesktop.portal.Camera` (session bus, xdg-desktop-portal >= 1.18). No new runtime deps, no schema changes.
+- No new runtime deps: `Shell.CameraMonitor` ships with the shell (mutter's PipeWire camera monitoring, same object GNOME Shell's indicator uses). No schema changes.
 - No behavior change while a camera is active; change only affects when the ring shows.
