@@ -11,12 +11,12 @@ import St from 'gi://St';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-// ponytail: hardcoded knob. Add a gsettings schema if this ever needs one.
-const BORDER = 150; // logical px per edge
 const RING_STYLE = 'background-color: #ffffff;';
 
 export default class RingLightExtension extends Extension {
     enable() {
+        this._settings = this.getSettings();
+        this._settingsChangedId = this._settings.connect('changed', () => this._build());
         this._borders = [];
         this._build();
         this._monitorsChangedId = Main.layoutManager.connect(
@@ -24,6 +24,8 @@ export default class RingLightExtension extends Extension {
     }
 
     disable() {
+        this._settings.disconnect(this._settingsChangedId);
+        this._settings = null;
         Main.layoutManager.disconnect(this._monitorsChangedId);
         for (const a of this._borders)
             Main.layoutManager.removeChrome(a);
@@ -34,6 +36,8 @@ export default class RingLightExtension extends Extension {
         for (const a of this._borders)
             Main.layoutManager.removeChrome(a);
         this._borders = [];
+
+        const BORDER = this._settings.get_int('border-width');
 
         for (const m of Main.layoutManager.monitors) {
             // mutter 18 dropped Meta.Monitor.geometry; the layout manager
@@ -59,10 +63,10 @@ export default class RingLightExtension extends Extension {
                 // registers the strip as a strut and adds it to the uiGroup
                 Main.layoutManager.addChrome(a, {affectsStruts: true});
                 // keep the ring under the top bar so the panel stays readable.
-                // panelBox is created after extensions load at startup, so it
-                // may not exist yet — it gets appended above our strips anyway
-                if (Main.panelBox)
-                    Main.layoutManager.uiGroup.set_child_below_sibling(a, Main.panelBox);
+                // panelBox exists when extensions load (created before them),
+                // and addChrome puts us above it otherwise
+                if (Main.layoutManager.panelBox)
+                    Main.layoutManager.uiGroup.set_child_below_sibling(a, Main.layoutManager.panelBox);
                 this._borders.push(a);
             }
         }

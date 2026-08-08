@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.ringlight" path="/org/gnome/shell/extensions/ringlight/">
+    <key name="border-width" type="i">
+      <default>150</default>
+      <summary>Border width</summary>
+      <description>Width in logical pixels of the white ring around each monitor.</description>
+    </key>
+  </schema>
+</schemalist>
