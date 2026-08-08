@@ -1,11 +1,23 @@
 import Adw from 'gi://Adw';
 import Gio from 'gi://Gio';
 import Gtk from 'gi://Gtk';
-import {ExtensionPreferences} from 'resource:///org/gnome/shell/extensions/prefs.js';
+
+// GNOME 50 moved ExtensionPreferences to the Extensions daemon resource;
+// 45-49 keep the shell one. Try new path, fall back to old.
+let ExtensionPreferences;
+try {
+    ({ExtensionPreferences} =
+        await import('resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js'));
+} catch {
+    ({ExtensionPreferences} =
+        await import('resource:///org/gnome/shell/extensions/prefs.js'));
+}
 
 export default class RingLightPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
+
+        const page = new Adw.PreferencesPage();
         const group = new Adw.PreferencesGroup({title: 'Ring'});
 
         const row = new Adw.SpinRow({
@@ -20,6 +32,7 @@ export default class RingLightPreferences extends ExtensionPreferences {
         settings.bind('border-width', row.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
 
         group.add(row);
-        window.add(group);
+        page.add(group);
+        window.add(page);
     }
 }
