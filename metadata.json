@@ -1,8 +1,10 @@
 {
   "name": "Ring Light",
   "description": "White 150px border around every monitor; maximized windows shrink to stay inside it.",
-  "uuid": "ringlight@daniel",
+  "uuid": "ringlight@danielgenezini",
+  "url": "https://github.com/dgenezini/gnome-ringlight",
   "settings-schema": "org.gnome.shell.extensions.ringlight",
   "shell-version": ["45", "46", "47", "48", "49", "50"],
-  "version": 1
+  "version": 2,
+  "version-name": "1.0.0"
 }

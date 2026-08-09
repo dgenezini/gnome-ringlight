@@ -19,23 +19,42 @@ Supports GNOME Shell 45–50.
 
 ## Install
 
+### Zip release (recommended)
+
+Download `ringlight@danielgenezini.shell-extension.zip` from the
+[latest release](https://github.com/dgenezini/gnome-ringlight/releases) and
+install it:
+
+```sh
+gnome-extensions install ringlight@danielgenezini.shell-extension.zip
+```
+
+On X11, restart the shell with `alt+F2` → `r`; on Wayland, re-login. Then
+enable:
+
+```sh
+gnome-extensions enable ringlight@danielgenezini
+```
+
+### From source
+
 Clone the repo and symlink it into the extensions directory:
 
 ```sh
-git clone <this-repo> ~/.local/share/gnome-shell/extensions/ringlight@daniel
+git clone https://github.com/dgenezini/gnome-ringlight ~/.local/share/gnome-shell/extensions/ringlight@danielgenezini
 ```
 
 If you cloned elsewhere, symlink instead:
 
 ```sh
-ln -s /path/to/gnome-ringlight ~/.local/share/gnome-shell/extensions/ringlight@daniel
+ln -s /path/to/gnome-ringlight ~/.local/share/gnome-shell/extensions/ringlight@danielgenezini
 ```
 
 On X11, log out and back in (or restart the shell with `alt+F2` → `r`). On
 Wayland, re-login or reboot. Then enable:
 
 ```sh
-gnome-extensions enable ringlight@daniel
+gnome-extensions enable ringlight@danielgenezini
 ```
 
 ### From source
@@ -70,7 +89,7 @@ install step.
 Reload after any change:
 
 ```sh
-gnome-extensions disable ringlight@daniel && gnome-extensions enable ringlight@daniel
+gnome-extensions disable ringlight@danielgenezini && gnome-extensions enable ringlight@danielgenezini
 ```
 
 Schema or prefs changes may need a full shell restart (`alt+F2` → `r` on X11,

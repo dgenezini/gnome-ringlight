@@ -1,10 +1,10 @@
 # AGENTS.md
 
-GNOME Shell extension "Ring Light" (`ringlight@daniel`): white border around each monitor that shrinks the work area so maximized/tiled windows stay inside it. ESM JavaScript (GJS), no build system, no tests, no CI. Host runs GNOME Shell 50.3.
+GNOME Shell extension "Ring Light" (`ringlight@danielgenezini`): white border around each monitor that shrinks the work area so maximized/tiled windows stay inside it. ESM JavaScript (GJS), no build system, no tests, no CI. Host runs GNOME Shell 50.3.
 
 ## Dev loop
 
-- Repo is **symlinked** from `~/.local/share/gnome-shell/extensions/ringlight@daniel` — edits are live, no install step.
+- Repo is **symlinked** from `~/.local/share/gnome-shell/extensions/ringlight@danielgenezini` — edits are live, no install step.
 - Code changes need a **full shell restart** (`alt+F2` → `r` on X11, Wayland session re-login). `gnome-extensions disable/enable` only re-runs `enable()`/`disable()` on the cached module — GJS caches the `file://` import per session, so new code is never read. Schema/prefs changes also need restart.
 - Watch errors: `journalctl -f /usr/bin/gnome-shell`.
 - Syntax check (no linter/test runner exists): `node --check extension.js prefs.js`.

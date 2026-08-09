@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+//
 // Ring Light: white 150px border around every monitor that shrinks the
 // usable work area so maximized/tiled/new windows stay inside the ring.
 //
