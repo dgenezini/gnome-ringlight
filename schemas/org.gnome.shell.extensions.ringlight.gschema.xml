@@ -6,5 +6,20 @@
       <summary>Border width</summary>
       <description>Width in logical pixels of the white ring around each monitor.</description>
     </key>
+    <key name="width-mode" type="s">
+      <default>'pixels'</default>
+      <summary>Ring width mode</summary>
+      <description>How the ring width is defined: 'pixels' uses border-width, 'resolution' derives it from the available area resolution.</description>
+    </key>
+    <key name="available-width" type="i">
+      <default>1920</default>
+      <summary>Available width</summary>
+      <description>Desired work area width in logical pixels; ring width is derived from it in resolution mode.</description>
+    </key>
+    <key name="available-height" type="i">
+      <default>1080</default>
+      <summary>Available height</summary>
+      <description>Desired work area height in logical pixels; ring width is derived from it in resolution mode.</description>
+    </key>
   </schema>
 </schemalist>

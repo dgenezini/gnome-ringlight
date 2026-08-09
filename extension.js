@@ -148,6 +148,7 @@ export default class RingLightExtension extends Extension {
             Main.layoutManager.removeChrome(a);
         this._borders = [];
 
+        const mode = this._settings.get_string('width-mode');
         const BORDER = this._settings.get_int('border-width');
 
         for (const m of Main.layoutManager.monitors) {
@@ -155,14 +156,20 @@ export default class RingLightExtension extends Extension {
             // Monitor objects now expose x/y/width/height directly
             const {x, y, width, height} = m.geometry ?? m;
 
+            // resolution mode: ring thickness per axis = (monitor − available) / 2
+            const marginX = mode === 'resolution' ?
+                Math.max(1, Math.round((width - this._settings.get_int('available-width')) / 2)) : BORDER;
+            const marginY = mode === 'resolution' ?
+                Math.max(1, Math.round((height - this._settings.get_int('available-height')) / 2)) : BORDER;
+
             // full-width strips overlap the vertical strips in the corners;
             // struts work per edge so overlap does not matter
             const edges = [
-                {x, y, width, height: BORDER},                                  // top
-                {x, y: y + height - BORDER, width, height: BORDER},             // bottom
-                {x, y: y + BORDER, width: BORDER, height: Math.max(1, height - 2 * BORDER)}, // left
-                {x: x + width - BORDER, y: y + BORDER, width: BORDER,
-                    height: Math.max(1, height - 2 * BORDER)},                               // right
+                {x, y, width, height: marginY},                                  // top
+                {x, y: y + height - marginY, width, height: marginY},            // bottom
+                {x, y: y + marginY, width: marginX, height: Math.max(1, height - 2 * marginY)}, // left
+                {x: x + width - marginX, y: y + marginY, width: marginX,
+                    height: Math.max(1, height - 2 * marginY)},                               // right
             ];
 
             for (const e of edges) {
