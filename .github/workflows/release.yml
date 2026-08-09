@@ -1,0 +1,23 @@
+name: Release
+
+on:
+  push:
+    tags: ["*"]
+
+jobs:
+  release:
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pack extension
+        run: |
+          mkdir -p dist
+          zip -r "dist/ringlight@danielgenezini.shell-extension.zip" \
+            metadata.json extension.js prefs.js schemas/
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "dist/ringlight@danielgenezini.shell-extension.zip" --generate-notes
