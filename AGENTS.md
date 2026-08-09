@@ -1,0 +1,32 @@
+# AGENTS.md
+
+GNOME Shell extension "Ring Light" (`ringlight@daniel`): white border around each monitor that shrinks the work area so maximized/tiled windows stay inside it. ESM JavaScript (GJS), no build system, no tests, no CI. Host runs GNOME Shell 50.3.
+
+## Dev loop
+
+- Repo is **symlinked** from `~/.local/share/gnome-shell/extensions/ringlight@daniel` — edits are live, no install step.
+- Reload after changes: `gnome-extensions disable ringlight@daniel && gnome-extensions enable ringlight@daniel`. Schema or prefs changes may need full shell restart (`alt+F2` → `r` or Wayland session re-login).
+- Watch errors: `journalctl -f /usr/bin/gnome-shell`.
+- Syntax check (no linter/test runner exists): `node --check extension.js prefs.js`.
+- Every feature change is manual-tested (see archived openspec tasks for the checklist: camera on/off, monitor add/remove, disable while active).
+
+## Version compatibility (GNOME 45–50)
+
+Code must run across `metadata.json` `shell-version` range. Two known dances, keep the pattern for any new cross-version API:
+
+- `prefs.js` dynamic-imports `ExtensionPreferences` from the GNOME 50 Extensions-daemon resource, falls back to the 45–49 shell resource.
+- Mutteer 18 (GNOME 48+) dropped `Meta.Monitor.geometry`; code uses `m.geometry ?? m` on layout-manager monitor objects.
+- Bump `shell-version` in `metadata.json` when adding version support.
+
+## Architecture
+
+- `extension.js`: 4 `St.Widget` strips per monitor (top/bottom full width, left/right inset) registered via `Main.layoutManager.addChrome(a, {affectsStruts: true})`. Struts fold into every workspace's builtin struts, so mutter shrinks the work area; fullscreen ignores struts by design (ring stays visible on calls).
+- Ring is kept below the top bar via `set_child_below_sibling(panelBox)`; strips are `reactive: false` so clicks pass through.
+- **Ring is only active while a camera is in use** — `new Shell.CameraMonitor()` (same object shell's camera indicator uses), gated by `_setActive()`. If the monitor can't be created, ring stays on permanently with a warning.
+- `prefs.js`: settings window, binds single key `border-width` (int 1–1000, default 150) from schema `org.gnome.shell.extensions.ringlight`.
+- `schemas/gschemas.compiled` is a **committed binary** — after editing `schemas/*.gschema.xml`, recompile with `glib-compile-schemas schemas/` and commit the new binary, or settings changes won't apply.
+
+## Workflow
+
+- Features go through OpenSpec: `openspec/` holds specs + archived changes; commands `/opsx-propose`, `/opsx-apply`, `/opsx-update`, `/opsx-archive` (definitions in `.opencode/commands/`). Specs in `openspec/specs/` are the source of truth — keep implementation in sync.
+- No README; commit history is the only other documentation. Conventional commit-ish messages, e.g. "Toggle ringlight in camera toggle".
