@@ -5,7 +5,7 @@ GNOME Shell extension "Ring Light" (`ringlight@daniel`): white border around eac
 ## Dev loop
 
 - Repo is **symlinked** from `~/.local/share/gnome-shell/extensions/ringlight@daniel` — edits are live, no install step.
-- Reload after changes: `gnome-extensions disable ringlight@daniel && gnome-extensions enable ringlight@daniel`. Schema or prefs changes may need full shell restart (`alt+F2` → `r` or Wayland session re-login).
+- Code changes need a **full shell restart** (`alt+F2` → `r` on X11, Wayland session re-login). `gnome-extensions disable/enable` only re-runs `enable()`/`disable()` on the cached module — GJS caches the `file://` import per session, so new code is never read. Schema/prefs changes also need restart.
 - Watch errors: `journalctl -f /usr/bin/gnome-shell`.
 - Syntax check (no linter/test runner exists): `node --check extension.js prefs.js`.
 - Every feature change is manual-tested (see archived openspec tasks for the checklist: camera on/off, monitor add/remove, disable while active).
@@ -22,7 +22,7 @@ Code must run across `metadata.json` `shell-version` range. Two known dances, ke
 
 - `extension.js`: 4 `St.Widget` strips per monitor (top/bottom full width, left/right inset) registered via `Main.layoutManager.addChrome(a, {affectsStruts: true})`. Struts fold into every workspace's builtin struts, so mutter shrinks the work area; fullscreen ignores struts by design (ring stays visible on calls).
 - Ring is kept below the top bar via `set_child_below_sibling(panelBox)`; strips are `reactive: false` so clicks pass through.
-- **Ring is only active while a camera is in use** — `new Shell.CameraMonitor()` (same object shell's camera indicator uses), gated by `_setActive()`. If the monitor can't be created, ring stays on permanently with a warning.
+- **Ring is only active while a camera is in use** — `new Shell.CameraMonitor()` (same object shell's camera indicator uses), gated by `_setActive()`. Complemented by a 1s poll for open `/dev/videoX` files, since Firefox/Chrome bypass PipeWire and open the device directly. If the monitor can't be created, ring stays on permanently with a warning.
 - `prefs.js`: settings window, binds single key `border-width` (int 1–1000, default 150) from schema `org.gnome.shell.extensions.ringlight`.
 - `schemas/gschemas.compiled` is a **committed binary** — after editing `schemas/*.gschema.xml`, recompile with `glib-compile-schemas schemas/` and commit the new binary, or settings changes won't apply.
 

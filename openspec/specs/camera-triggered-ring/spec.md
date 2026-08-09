@@ -7,7 +7,7 @@ Make the ring light up automatically while any camera is in use, instead of bein
 ## Requirements
 
 ### Requirement: Ring activates when camera turns on
-The extension SHALL show the ring when mutter reports a camera in use, and SHALL keep the ring visible while a camera is in use.
+The extension SHALL show the ring when mutter reports a camera in use, and SHALL keep the ring visible while a camera is in use. Direct v4l2 camera use SHALL also activate the ring: browsers (Firefox/Chrome) open /dev/videoX directly instead of PipeWire, so the extension polls for open camera device files as a complement to `Shell.CameraMonitor`.
 
 #### Scenario: Camera turns on while extension enabled
 - **WHEN** the camera in-use state reported by `Shell.CameraMonitor` (`cameras-in-use` property, same object GNOME Shell's camera indicator binds to) changes to true
