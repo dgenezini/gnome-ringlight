@@ -6,6 +6,16 @@
       <summary>Border width</summary>
       <description>Width in logical pixels of the white ring around each monitor.</description>
     </key>
+    <key name="border-radius" type="i">
+      <default>100</default>
+      <summary>Corner radius</summary>
+      <description>Radius in logical pixels of the ring's rounded corners; 0 for sharp corners. The inner corner radius is this minus the ring width.</description>
+    </key>
+    <key name="padding" type="i">
+      <default>10</default>
+      <summary>Outside padding</summary>
+      <description>Gap in logical pixels between the ring and the monitor edges, including the top bar and docks.</description>
+    </key>
     <key name="width-mode" type="s">
       <default>'pixels'</default>
       <summary>Ring width mode</summary>

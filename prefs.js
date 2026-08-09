@@ -47,6 +47,28 @@ export default class RingLightPreferences extends ExtensionPreferences {
         });
         settings.bind('border-width', widthRow.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
 
+        const radiusRow = new Adw.SpinRow({
+            title: 'Corner radius',
+            subtitle: 'Rounded ring corners; inner corner radius is this minus the ring width. 0 = sharp corners',
+            adjustment: new Gtk.Adjustment({
+                lower: 0,
+                upper: 1000,
+                step_increment: 10,
+            }),
+        });
+        settings.bind('border-radius', radiusRow.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
+
+        const paddingRow = new Adw.SpinRow({
+            title: 'Outside padding',
+            subtitle: 'Gap between the ring and the monitor edges (top bar/docks), in pixels',
+            adjustment: new Gtk.Adjustment({
+                lower: 0,
+                upper: 1000,
+                step_increment: 1,
+            }),
+        });
+        settings.bind('padding', paddingRow.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
+
         const availWidthRow = new Adw.SpinRow({
             title: 'Available width',
             subtitle: 'Desired work area width; ring width derived from it (monitor width − this, halved per side)',
@@ -81,6 +103,8 @@ export default class RingLightPreferences extends ExtensionPreferences {
 
         group.add(modeRow);
         group.add(widthRow);
+        group.add(radiusRow);
+        group.add(paddingRow);
         group.add(availWidthRow);
         group.add(availHeightRow);
         page.add(group);

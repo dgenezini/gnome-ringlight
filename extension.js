@@ -16,7 +16,6 @@ import St from 'gi://St';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-const RING_STYLE = 'background-color: #ffffff;';
 const V4L2_POLL_MS = 1000;
 const V4L2_STREAK_MIN = 2; // consecutive polls before trusting an open
 
@@ -148,8 +147,18 @@ export default class RingLightExtension extends Extension {
             Main.layoutManager.removeChrome(a);
         this._borders = [];
 
+        // removeChrome only *queues* the strut recompute (BEFORE_REDRAW
+        // late). The work-area query below must see the bars but not our
+        // strips, or every rebuild would compound the error (runaway ring
+        // while dragging a settings spin). Force the same idempotent
+        // recompute the late handler runs; private but stable 45–50.
+        if (typeof Main.layoutManager._updateRegions === 'function')
+            Main.layoutManager._updateRegions();
+
         const mode = this._settings.get_string('width-mode');
         const BORDER = this._settings.get_int('border-width');
+        const RADIUS = this._settings.get_int('border-radius');
+        const PADDING = this._settings.get_int('padding');
 
         for (const m of Main.layoutManager.monitors) {
             // mutter 18 dropped Meta.Monitor.geometry; the layout manager
@@ -162,19 +171,57 @@ export default class RingLightExtension extends Extension {
             const marginY = mode === 'resolution' ?
                 Math.max(1, Math.round((height - this._settings.get_int('available-height')) / 2)) : BORDER;
 
-            // full-width strips overlap the vertical strips in the corners;
-            // struts work per edge so overlap does not matter
+            // work area = monitor minus what bars/docks reserve (their
+            // struts). The ring hugs it, so the band starts after the top
+            // bar and ends before a task bar/dock instead of drawing
+            // behind them.
+            const wa = Main.layoutManager.getWorkAreaForMonitor(m.index);
+            const top = Math.max(0, wa.y - y);
+            const bottom = Math.max(0, y + height - (wa.y + wa.height));
+            const left = Math.max(0, wa.x - x);
+            const right = Math.max(0, x + width - (wa.x + wa.width));
+
+            // ring look: one widget over the work area, inset by PADDING so
+            // it floats off the monitor edges / top bar / docks, painted as
+            // a rounded border. CSS gives the inner corner radius = radius −
+            // border width, so the band keeps constant thickness.
+            // Must NOT affect struts: a full-work-area actor touching the
+            // monitor edges would become a single full-size strut (see
+            // _updateRegions in js/ui/layout.js) and collapse the work area.
+            const ring = new St.Widget({
+                x: wa.x + PADDING, y: wa.y + PADDING,
+                width: Math.max(1, wa.width - 2 * PADDING),
+                height: Math.max(1, wa.height - 2 * PADDING),
+                style: `background-color: transparent;
+                    border-left-width: ${marginX}px; border-right-width: ${marginX}px;
+                    border-top-width: ${marginY}px; border-bottom-width: ${marginY}px;
+                    border-color: #ffffff; border-radius: ${RADIUS}px;`,
+                reactive: false, // pointer clicks fall through to windows
+            });
+            Main.layoutManager.addChrome(ring);
+            Main.layoutManager.uiGroup.set_child_below_sibling(ring, Main.layoutManager.panelBox);
+            this._borders.push(ring);
+
+            // work area: transparent strips keep the struts that shrink it;
+            // transparent so they never paint over the ring's rounded corners.
+            // A strut only counts when the actor touches a monitor edge
+            // (_updateRegions picks the side from the edges it touches), so
+            // each strip spans from the monitor edge over the bar's reserved
+            // space plus the padding plus the ring thickness.
             const edges = [
-                {x, y, width, height: marginY},                                  // top
-                {x, y: y + height - marginY, width, height: marginY},            // bottom
-                {x, y: y + marginY, width: marginX, height: Math.max(1, height - 2 * marginY)}, // left
-                {x: x + width - marginX, y: y + marginY, width: marginX,
-                    height: Math.max(1, height - 2 * marginY)},                               // right
+                {x, y, width, height: top + PADDING + marginY},                                        // top
+                {x, y: y + height - bottom - PADDING - marginY, width,
+                    height: bottom + PADDING + marginY},                                               // bottom
+                {x, y: wa.y + PADDING + marginY, width: left + PADDING + marginX,
+                    height: Math.max(1, wa.height - 2 * (PADDING + marginY))},                         // left
+                {x: wa.x + wa.width - PADDING - marginX, y: wa.y + PADDING + marginY,
+                    width: right + PADDING + marginX,
+                    height: Math.max(1, wa.height - 2 * (PADDING + marginY))},                         // right
             ];
 
             for (const e of edges) {
                 const a = new St.Widget({
-                    style: RING_STYLE,
+                    style: 'background-color: transparent;',
                     reactive: false, // pointer clicks fall through to windows
                     ...e,
                 });
