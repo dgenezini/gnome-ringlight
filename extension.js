@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// Ring Light: white 150px border around every monitor that shrinks the
+// Ring Light: white ring around every monitor that shrinks the
 // usable work area so maximized/tiled/new windows stay inside the ring.
 //
 // Space is reserved the same way the top bar does it: each ring strip is
@@ -9,8 +9,11 @@
 // work area (maximize, snap-tiling and window placement all respect it).
 // Fullscreen windows ignore struts by design, so the ring stays visible
 // during video calls.
+import Clutter from 'gi://Clutter';
+import Cogl from 'gi://Cogl';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -42,20 +45,85 @@ function temperatureToRGB(kelvin) {
     return [r, g, b].map(clamp);
 }
 
-// rounded-rect path; radius clamped to fit the rect
-function roundedRectPath(cr, x, y, w, h, radius) {
-    const r = Math.min(radius, w / 2, h / 2);
-    cr.moveTo(x + r, y);
-    cr.lineTo(x + w - r, y);
-    cr.arc(x + w - r, y + r, r, -Math.PI / 2, 0);
-    cr.lineTo(x + w, y + h - r);
-    cr.arc(x + w - r, y + h - r, r, 0, Math.PI / 2);
-    cr.lineTo(x + r, y + h);
-    cr.arc(x + r, y + h - r, r, Math.PI / 2, Math.PI);
-    cr.lineTo(x, y + r);
-    cr.arc(x + r, y + r, r, Math.PI, 3 * Math.PI / 2);
-    cr.closePath();
+// One fragment shader paints core plus medium and outer glow. `ringDistance`
+// is negative inside the rounded band, positive outside it; its SDF curves
+// make corners radial instead of joining four rectangular gradients.
+const RING_SHADER = `
+uniform sampler2D tex;
+uniform float u_width;
+uniform float u_height;
+uniform float u_outer_left;
+uniform float u_outer_top;
+uniform float u_outer_right;
+uniform float u_outer_bottom;
+uniform float u_inner_left;
+uniform float u_inner_top;
+uniform float u_inner_right;
+uniform float u_inner_bottom;
+uniform float u_outer_radius;
+uniform float u_inner_radius;
+uniform float u_min_thickness;
+uniform float u_red;
+uniform float u_green;
+uniform float u_blue;
+uniform float u_brightness;
+uniform float u_softness;
+uniform float u_glow;
+
+float roundedRectSdf(vec2 point, vec2 minCorner, vec2 maxCorner, float radius) {
+    vec2 halfSize = (maxCorner - minCorner) * 0.5;
+    float r = min(radius, min(halfSize.x, halfSize.y));
+    vec2 q = abs(point - (minCorner + maxCorner) * 0.5) - halfSize + vec2(r);
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
 }
+
+void main() {
+    vec2 point = cogl_tex_coord_in[0].st * vec2(u_width, u_height);
+    float outer = roundedRectSdf(point, vec2(u_outer_left, u_outer_top),
+        vec2(u_outer_right, u_outer_bottom), u_outer_radius);
+    float inner = roundedRectSdf(point, vec2(u_inner_left, u_inner_top),
+        vec2(u_inner_right, u_inner_bottom), u_inner_radius);
+    float ringDistance = max(outer, -inner);
+    float insideDepth = max(0.0, -ringDistance);
+    // One physical-pixel coverage transition anti-aliases SDF edges.
+    float inside = 1.0 - smoothstep(-1.0, 1.0, ringDistance);
+    // Glow consumes width from both band edges, leaving a bright core in the
+    // center. Keep a 20px core where the configured width permits it. The
+    // curve is a single C2-smooth quintic: zero at both band edges (no hard
+    // line), full at the core — no slope joins to band.
+    float maxGlow = max(0.0, (u_min_thickness - 20.0) * 0.5);
+    float glowWidth = min(100.0 * u_glow * (2.0 * u_softness), maxGlow);
+    float progress = glowWidth > 0.01 ?
+        clamp(insideDepth / glowWidth, 0.0, 1.0) : 1.0;
+    float glow = progress * progress * progress *
+        (progress * (progress * 6.0 - 15.0) + 10.0);
+    float alpha = glow * inside * u_brightness;
+    vec4 source = texture2D(tex, cogl_tex_coord_in[0].st);
+    cogl_color_out = vec4(u_red, u_green, u_blue, 1.0) * alpha * source.a;
+}`;
+
+const RingShaderEffect = GObject.registerClass(
+class RingShaderEffect extends Clutter.ShaderEffect {
+    _init(uniforms) {
+        super._init({shader_type: Cogl.ShaderType.FRAGMENT});
+        this._uniforms = uniforms;
+        this.set_shader_source(RING_SHADER);
+    }
+
+    vfunc_paint_target(node, paintContext) {
+        const texture = new GObject.Value();
+        texture.init(GObject.TYPE_INT);
+        texture.set_int(0);
+        this.set_uniform_value('tex', texture);
+        for (const [name, number] of Object.entries(this._uniforms)) {
+            const value = new GObject.Value();
+            value.init(GObject.TYPE_FLOAT);
+            value.set_float(number);
+            this.set_uniform_value(name, value);
+        }
+        super.vfunc_paint_target(node, paintContext);
+    }
+});
 
 const V4L2_POLL_MS = 1000;
 const V4L2_STREAK_MIN = 2; // consecutive polls before trusting an open
@@ -269,10 +337,13 @@ export default class RingLightExtension extends Extension {
             Main.layoutManager._updateRegions();
 
         const mode = this._settings.get_string('width-mode');
-        const BORDER = this._settings.get_int('border-width');
-        const RADIUS = this._settings.get_int('border-radius');
+        const BORDER = this._settings.get_int('ring-width');
+        const RADIUS = this._settings.get_int('ring-radius');
         const PADDING = this._settings.get_int('padding');
-        const [CR, CG, CB] = temperatureToRGB(this._settings.get_int('border-color-temperature'));
+        const [CR, CG, CB] = temperatureToRGB(this._settings.get_int('ring-color-temperature'));
+        const BRIGHTNESS = this._settings.get_int('brightness') / 100;
+        const SOFTNESS = this._settings.get_int('softness') / 100;
+        const GLOW = this._settings.get_int('glow') / 100;
 
         for (const m of Main.layoutManager.monitors) {
             // mutter 18 dropped Meta.Monitor.geometry; the layout manager
@@ -295,59 +366,44 @@ export default class RingLightExtension extends Extension {
             const left = Math.max(0, wa.x - x);
             const right = Math.max(0, x + width - (wa.x + wa.width));
 
-            // ring look: one widget per monitor, painted with Cairo
-            // (St.DrawingArea) because the natural look needs what St can't
-            // do: a soft gradient at the band edges, plus a band thickness
-            // that matches the configured width exactly.
-            // The band sits at the work area inset by PADDING, thickness W =
-            // max(marginX, marginY) — a single stroke can't vary per axis
-            // (CSS borders could); max keeps every side at least as thick as
-            // configured. The widget is bigger than the band by GLOW_M so the
-            // Shell.BlurEffect glow fades out inside the widget instead of
-            // being clipped (the bug before: the stroke was centered on the
-            // widget edge, so half the band fell outside and was cut).
-            // Must NOT affect struts: a full-work-area actor touching the
-            // monitor edges would become a single full-size strut (see
-            // _updateRegions in js/ui/layout.js) and collapse the work area.
-            const W = Math.max(marginX, marginY);
-            // small gradient: ~3px soft fade at the inner and outer band
-            // edges, flat colored center (blur radius 2 ≈ 2σ transition).
-            // Wide gradients (radius ∝ W) were tried and rejected — the
-            // center stayed flat but the edges bled too far into the screen.
-            const GLOW_RADIUS = 2;
-            const GLOW_M = GLOW_RADIUS * 3; // ≈ gaussian tail, fades to 0
-            const ringW = Math.max(1, wa.width - 2 * PADDING + 2 * GLOW_M);
-            const ringH = Math.max(1, wa.height - 2 * PADDING + 2 * GLOW_M);
-            const ring = new St.DrawingArea({
-                x: wa.x + PADDING - GLOW_M,
-                y: wa.y + PADDING - GLOW_M,
+            // Visual ring is non-strut chrome: its white source surface is
+            // recolored and made transparent entirely by one shader. Glow is
+            // clipped to this band; transparent struts reserve its margins.
+            const shapeW = Math.max(1, wa.width - 2 * PADDING);
+            const shapeH = Math.max(1, wa.height - 2 * PADDING);
+            const ringW = shapeW;
+            const ringH = shapeH;
+            const innerW = Math.max(1, shapeW - 2 * marginX);
+            const innerH = Math.max(1, shapeH - 2 * marginY);
+            const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+            const effect = new RingShaderEffect({
+                u_width: ringW * scale,
+                u_height: ringH * scale,
+                u_outer_left: 0,
+                u_outer_top: 0,
+                u_outer_right: shapeW * scale,
+                u_outer_bottom: shapeH * scale,
+                u_inner_left: ((shapeW - innerW) / 2) * scale,
+                u_inner_top: ((shapeH - innerH) / 2) * scale,
+                u_inner_right: ((shapeW + innerW) / 2) * scale,
+                u_inner_bottom: ((shapeH + innerH) / 2) * scale,
+                u_outer_radius: RADIUS * scale,
+                u_inner_radius: Math.max(0, RADIUS - Math.max(marginX, marginY)) * scale,
+                u_min_thickness: Math.min(marginX, marginY) * scale,
+                u_red: CR / 255,
+                u_green: CG / 255,
+                u_blue: CB / 255,
+                u_brightness: BRIGHTNESS,
+                u_softness: SOFTNESS,
+                u_glow: GLOW,
+            });
+            const ring = new St.Widget({
+                x: wa.x + PADDING,
+                y: wa.y + PADDING,
                 width: ringW, height: ringH,
                 reactive: false, // pointer clicks fall through to windows
-                // real blur filter: crisp band below → smooth cross-band
-                // gradient, color at center to transparent at the edges
-                effect: new Shell.BlurEffect({radius: GLOW_RADIUS}),
-            });
-            ring.connect('repaint', () => {
-                // surface size is physical px; draw in logical px so the
-                // stroke scales cleanly on HiDPI monitors
-                const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-                const [surfW, surfH] = ring.get_surface_size();
-                const cr = ring.get_context();
-                cr.save();
-                cr.scale(scale, scale);
-                const w = surfW / scale;
-                const h = surfH / scale;
-
-                // crisp full-width band, fully inside the widget: spans
-                // [PADDING, PADDING + W] relative to the work area. Fully
-                // opaque — the only softness is the glow radius blur.
-                const inset = GLOW_M + W / 2;
-                cr.setSourceRGBA(CR / 255, CG / 255, CB / 255, 1);
-                cr.setLineWidth(W);
-                roundedRectPath(cr, inset, inset,
-                    Math.max(1, w - 2 * inset), Math.max(1, h - 2 * inset), RADIUS);
-                cr.stroke();
-                cr.restore();
+                style: 'background-color: white;', // source alpha for shader
+                effect,
             });
             Main.layoutManager.addChrome(ring);
             Main.layoutManager.uiGroup.set_child_below_sibling(ring, Main.layoutManager.panelBox);

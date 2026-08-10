@@ -37,7 +37,7 @@ export default class RingLightPreferences extends ExtensionPreferences {
             settings.set_string('width-mode', modeRow.selected === 1 ? 'resolution' : 'pixels'));
 
         const widthRow = new Adw.SpinRow({
-            title: 'Border width',
+            title: 'Ring width',
             subtitle: 'Ring width around each monitor, in pixels',
             adjustment: new Gtk.Adjustment({
                 lower: 1,
@@ -45,7 +45,7 @@ export default class RingLightPreferences extends ExtensionPreferences {
                 step_increment: 10,
             }),
         });
-        settings.bind('border-width', widthRow.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
+        settings.bind('ring-width', widthRow.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
 
         // color temperature slider: track painted with the yellow→white ramp
         // so the slider itself previews the ring color. Title/subtitle are
@@ -60,7 +60,7 @@ export default class RingLightPreferences extends ExtensionPreferences {
             margin_end: 12,
         });
         const tempTitle = new Gtk.Label({
-            label: 'Border color temperature',
+            label: 'Ring color temperature',
             xalign: 0,
             wrap: true,
         });
@@ -81,7 +81,7 @@ export default class RingLightPreferences extends ExtensionPreferences {
             digits: 0, // draw_value label shows the Kelvin value
             hexpand: true,
         });
-        settings.bind('border-color-temperature', tempScale.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
+        settings.bind('ring-color-temperature', tempScale.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
         tempScale.add_css_class('ringlight-scale');
         const tempCss = new Gtk.CssProvider();
         tempCss.load_from_string(`scale.ringlight-scale trough {
@@ -97,6 +97,26 @@ export default class RingLightPreferences extends ExtensionPreferences {
         tempBox.append(tempScale);
         tempRow.child = tempBox;
 
+        const percentageRow = (title, subtitle, key) => {
+            const row = new Adw.SpinRow({
+                title,
+                subtitle,
+                adjustment: new Gtk.Adjustment({
+                    lower: 0,
+                    upper: 100,
+                    step_increment: 1,
+                }),
+            });
+            settings.bind(key, row.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
+            return row;
+        };
+        const brightnessRow = percentageRow(
+            'Brightness', 'Maximum ring opacity, as a percentage', 'brightness');
+        const softnessRow = percentageRow(
+            'Softness', 'Gradient transition width; 0% is a hard edge', 'softness');
+        const glowRow = percentageRow(
+            'Glow', 'Outer glow strength and spread; 0% disables it', 'glow');
+
         const radiusRow = new Adw.SpinRow({
             title: 'Corner radius',
             subtitle: 'Rounded ring corners; inner corner radius is this minus the ring width. 0 = sharp corners',
@@ -106,7 +126,7 @@ export default class RingLightPreferences extends ExtensionPreferences {
                 step_increment: 10,
             }),
         });
-        settings.bind('border-radius', radiusRow.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
+        settings.bind('ring-radius', radiusRow.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
 
         const paddingRow = new Adw.SpinRow({
             title: 'Outside padding',
@@ -154,6 +174,9 @@ export default class RingLightPreferences extends ExtensionPreferences {
         group.add(modeRow);
         group.add(widthRow);
         group.add(tempRow);
+        group.add(brightnessRow);
+        group.add(softnessRow);
+        group.add(glowRow);
         group.add(radiusRow);
         group.add(paddingRow);
         group.add(availWidthRow);

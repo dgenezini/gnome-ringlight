@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
   <schema id="org.gnome.shell.extensions.ringlight" path="/org/gnome/shell/extensions/ringlight/">
-    <key name="border-width" type="i">
-      <default>150</default>
-      <summary>Border width</summary>
+    <key name="ring-width" type="i">
+      <default>90</default>
+      <summary>Ring width</summary>
       <description>Width in logical pixels of the white ring around each monitor.</description>
     </key>
-    <key name="border-radius" type="i">
-      <default>100</default>
+    <key name="ring-radius" type="i">
+      <default>120</default>
       <summary>Corner radius</summary>
       <description>Radius in logical pixels of the ring's rounded corners; 0 for sharp corners. The inner corner radius is this minus the ring width.</description>
     </key>
@@ -19,7 +19,7 @@
     <key name="width-mode" type="s">
       <default>'pixels'</default>
       <summary>Ring width mode</summary>
-      <description>How the ring width is defined: 'pixels' uses border-width, 'resolution' derives it from the available area resolution.</description>
+      <description>How the ring width is defined: 'pixels' uses ring-width, 'resolution' derives it from the available area resolution.</description>
     </key>
     <key name="available-width" type="i">
       <default>1920</default>
@@ -31,11 +31,29 @@
       <summary>Available height</summary>
       <description>Desired work area height in logical pixels; ring width is derived from it in resolution mode.</description>
     </key>
-    <key name="border-color-temperature" type="i">
+    <key name="ring-color-temperature" type="i">
       <default>6500</default>
       <range min="2700" max="6500"/>
       <summary>Ring color temperature</summary>
       <description>Color temperature in Kelvin of the ring light, from warm yellow (2700 K) to daylight white (6500 K).</description>
+    </key>
+    <key name="brightness" type="i">
+      <default>100</default>
+      <range min="0" max="100"/>
+      <summary>Ring brightness</summary>
+      <description>Maximum opacity of the ring light, as a percentage.</description>
+    </key>
+    <key name="softness" type="i">
+      <default>25</default>
+      <range min="0" max="100"/>
+      <summary>Ring softness</summary>
+      <description>Width of gradient transitions in the ring light, as a percentage.</description>
+    </key>
+    <key name="glow" type="i">
+      <default>30</default>
+      <range min="0" max="100"/>
+      <summary>Ring glow</summary>
+      <description>Strength and spread of the medium and outer ring glow, as a percentage.</description>
     </key>
     <key name="ring-mode" type="s">
       <default>'auto'</default>
