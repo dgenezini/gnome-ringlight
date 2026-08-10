@@ -69,6 +69,10 @@ uniform float u_blue;
 uniform float u_brightness;
 uniform float u_softness;
 uniform float u_glow;
+uniform float u_mouse_x;
+uniform float u_mouse_y;
+uniform float u_cursor_radius;
+uniform float u_cursor_fade;
 
 float roundedRectSdf(vec2 point, vec2 minCorner, vec2 maxCorner, float radius) {
     vec2 halfSize = (maxCorner - minCorner) * 0.5;
@@ -98,6 +102,13 @@ void main() {
     float glow = progress * progress * progress *
         (progress * (progress * 6.0 - 15.0) + 10.0);
     float alpha = glow * inside * u_brightness;
+    // pointer avoidance: fade the ring out inside a circle around the
+    // cursor so it never covers the pointer; smoothstep ramps alpha from
+    // 0 at the cursor (or radius−fade from it) to full at the radius
+    if (u_cursor_radius > 0.0) {
+        float d = distance(point, vec2(u_mouse_x, u_mouse_y));
+        alpha *= smoothstep(u_cursor_radius - u_cursor_fade, u_cursor_radius, d);
+    }
     vec4 source = texture2D(tex, cogl_tex_coord_in[0].st);
     cogl_color_out = vec4(u_red, u_green, u_blue, 1.0) * alpha * source.a;
 }`;
@@ -143,6 +154,10 @@ export default class RingLightExtension extends Extension {
                 this._build();
         });
         this._borders = [];
+        this._rings = []; // visible ring widgets only (not strut strips)
+        this._cursorPos = null;
+        this._cursorUniforms = {radius: 0, fade: 0}; // scaled physical px
+        this._scale = 1;
         this._active = false;
         this._cameraInUse = false;
 
@@ -172,6 +187,14 @@ export default class RingLightExtension extends Extension {
         }
         this._refresh(); // initial state
 
+        // keep the cursor hole following the pointer; motion events arrive
+        // through mutter's input pipeline on both X11 and Wayland
+        this._motionId = global.stage.connect('motion-event', (_stage, event) => {
+            this._cursorPos = event.get_coords();
+            if (this._active && this._cursorUniforms.radius > 0)
+                this._updateCursorUniforms();
+        });
+
         // Browsers bypass PipeWire for video: Firefox/Chrome open /dev/videoX
         // directly, which CameraMonitor never sees. Poll for open camera fds.
         this._v4l2Streak = 0;
@@ -182,6 +205,10 @@ export default class RingLightExtension extends Extension {
     }
 
     disable() {
+        if (this._motionId) {
+            global.stage.disconnect(this._motionId);
+            this._motionId = 0;
+        }
         if (this._v4l2PollId) {
             GLib.source_remove(this._v4l2PollId);
             this._v4l2PollId = 0;
@@ -345,6 +372,21 @@ export default class RingLightExtension extends Extension {
         const SOFTNESS = this._settings.get_int('softness') / 100;
         const GLOW = this._settings.get_int('glow') / 100;
 
+        // pointer-avoidance state: cache the scaled radius/fade (the motion
+        // handler only refreshes x/y) and seed the hole at the current
+        // pointer, so it is correct the moment the ring appears
+        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        this._scale = scale;
+        this._cursorUniforms.radius = this._settings.get_int('cursor-radius') * scale;
+        this._cursorUniforms.fade = this._settings.get_int('cursor-fade') * scale;
+        if (!this._cursorPos) {
+            try {
+                this._cursorPos = global.display.get_pointer_info().get_position();
+            } catch (e) {
+                this._cursorPos = null; // hole appears at first motion event
+            }
+        }
+
         for (const m of Main.layoutManager.monitors) {
             // mutter 18 dropped Meta.Monitor.geometry; the layout manager
             // Monitor objects now expose x/y/width/height directly
@@ -375,7 +417,6 @@ export default class RingLightExtension extends Extension {
             const ringH = shapeH;
             const innerW = Math.max(1, shapeW - 2 * marginX);
             const innerH = Math.max(1, shapeH - 2 * marginY);
-            const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
             const effect = new RingShaderEffect({
                 u_width: ringW * scale,
                 u_height: ringH * scale,
@@ -408,6 +449,7 @@ export default class RingLightExtension extends Extension {
             Main.layoutManager.addChrome(ring);
             Main.layoutManager.uiGroup.set_child_below_sibling(ring, Main.layoutManager.panelBox);
             this._borders.push(ring);
+            this._rings.push({widget: ring, effect});
 
             // work area: transparent strips keep the struts that shrink it;
             // transparent so they never paint over the ring's rounded corners.
@@ -440,5 +482,27 @@ export default class RingLightExtension extends Extension {
                 this._borders.push(a);
             }
         }
+        this._updateCursorUniforms();
+    }
+
+    // cursor hole uniforms: pointer position is ring-local (the shader
+    // samples texture space) and scaled like u_width/u_height
+    _updateCursorUniforms() {
+        if (!this._cursorPos || this._rings.length === 0)
+            return;
+        const [cx, cy] = this._cursorPos;
+        for (const {widget, effect} of this._rings) {
+            this._setFloatUniform(effect, 'u_mouse_x', (cx - widget.x) * this._scale);
+            this._setFloatUniform(effect, 'u_mouse_y', (cy - widget.y) * this._scale);
+            this._setFloatUniform(effect, 'u_cursor_radius', this._cursorUniforms.radius);
+            this._setFloatUniform(effect, 'u_cursor_fade', this._cursorUniforms.fade);
+        }
+    }
+
+    _setFloatUniform(effect, name, number) {
+        const value = new GObject.Value();
+        value.init(GObject.TYPE_FLOAT);
+        value.set_float(number);
+        effect.set_uniform_value(name, value);
     }
 }

@@ -60,5 +60,17 @@
       <summary>Ring mode</summary>
       <description>How the ring is activated: 'auto' follows the camera, 'always' keeps the ring on, 'off' hides it.</description>
     </key>
+    <key name="cursor-radius" type="i">
+      <default>230</default>
+      <range min="0" max="1000"/>
+      <summary>Cursor radius</summary>
+      <description>Radius in logical pixels of the circle around the pointer where the ring fades out; 0 disables cursor avoidance.</description>
+    </key>
+    <key name="cursor-fade" type="i">
+      <default>150</default>
+      <range min="0" max="1000"/>
+      <summary>Cursor fade</summary>
+      <description>Soft-edge width of the cursor hole in logical pixels; 0 gives a hard circular edge.</description>
+    </key>
   </schema>
 </schemalist>

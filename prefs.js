@@ -139,6 +139,28 @@ export default class RingLightPreferences extends ExtensionPreferences {
         });
         settings.bind('padding', paddingRow.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
 
+        const cursorRadiusRow = new Adw.SpinRow({
+            title: 'Cursor radius',
+            subtitle: 'Ring fades out inside this circle around the pointer, in pixels. 0 disables',
+            adjustment: new Gtk.Adjustment({
+                lower: 0,
+                upper: 1000,
+                step_increment: 10,
+            }),
+        });
+        settings.bind('cursor-radius', cursorRadiusRow.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
+
+        const cursorFadeRow = new Adw.SpinRow({
+            title: 'Cursor fade',
+            subtitle: 'Soft-edge width of the cursor hole, in pixels. 0 gives a hard circular edge',
+            adjustment: new Gtk.Adjustment({
+                lower: 0,
+                upper: 1000,
+                step_increment: 10,
+            }),
+        });
+        settings.bind('cursor-fade', cursorFadeRow.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
+
         const availWidthRow = new Adw.SpinRow({
             title: 'Available width',
             subtitle: 'Desired work area width; ring width derived from it (monitor width − this, halved per side)',
@@ -179,6 +201,8 @@ export default class RingLightPreferences extends ExtensionPreferences {
         group.add(glowRow);
         group.add(radiusRow);
         group.add(paddingRow);
+        group.add(cursorRadiusRow);
+        group.add(cursorFadeRow);
         group.add(availWidthRow);
         group.add(availHeightRow);
         page.add(group);
