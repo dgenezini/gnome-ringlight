@@ -16,6 +16,45 @@ import St from 'gi://St';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+// Tanner Helland's blackbody approximation: maps a Kelvin color temperature
+// to [r, g, b] components (0-255), spanning the common light temps (2700K
+// warm yellow, 3000K warm white, 4000K neutral, 6500K daylight white).
+function temperatureToRGB(kelvin) {
+    const t = kelvin / 100;
+    let r, g, b;
+    if (t <= 66)
+        r = 255;
+    else
+        r = 329.698727446 * Math.pow(t - 60, -0.1332047592);
+    if (t <= 66)
+        g = 99.4708025861 * Math.log(t) - 161.1195681661;
+    else
+        g = 288.1221695283 * Math.pow(t - 60, -0.0755148492);
+    if (t >= 66)
+        b = 255;
+    else if (t <= 19)
+        b = 0;
+    else
+        b = 138.5177312231 * Math.log(t - 10) - 305.0447927307;
+    const clamp = v => Math.max(0, Math.min(255, Math.round(v)));
+    return [r, g, b].map(clamp);
+}
+
+// rounded-rect path; radius clamped to fit the rect
+function roundedRectPath(cr, x, y, w, h, radius) {
+    const r = Math.min(radius, w / 2, h / 2);
+    cr.moveTo(x + r, y);
+    cr.lineTo(x + w - r, y);
+    cr.arc(x + w - r, y + r, r, -Math.PI / 2, 0);
+    cr.lineTo(x + w, y + h - r);
+    cr.arc(x + w - r, y + h - r, r, 0, Math.PI / 2);
+    cr.lineTo(x + r, y + h);
+    cr.arc(x + r, y + h - r, r, Math.PI / 2, Math.PI);
+    cr.lineTo(x, y + r);
+    cr.arc(x + r, y + r, r, Math.PI, 3 * Math.PI / 2);
+    cr.closePath();
+}
+
 const V4L2_POLL_MS = 1000;
 const V4L2_STREAK_MIN = 2; // consecutive polls before trusting an open
 
@@ -159,6 +198,7 @@ export default class RingLightExtension extends Extension {
         const BORDER = this._settings.get_int('border-width');
         const RADIUS = this._settings.get_int('border-radius');
         const PADDING = this._settings.get_int('padding');
+        const [CR, CG, CB] = temperatureToRGB(this._settings.get_int('border-color-temperature'));
 
         for (const m of Main.layoutManager.monitors) {
             // mutter 18 dropped Meta.Monitor.geometry; the layout manager
@@ -181,22 +221,59 @@ export default class RingLightExtension extends Extension {
             const left = Math.max(0, wa.x - x);
             const right = Math.max(0, x + width - (wa.x + wa.width));
 
-            // ring look: one widget over the work area, inset by PADDING so
-            // it floats off the monitor edges / top bar / docks, painted as
-            // a rounded border. CSS gives the inner corner radius = radius −
-            // border width, so the band keeps constant thickness.
+            // ring look: one widget per monitor, painted with Cairo
+            // (St.DrawingArea) because the natural look needs what St can't
+            // do: a soft gradient at the band edges, plus a band thickness
+            // that matches the configured width exactly.
+            // The band sits at the work area inset by PADDING, thickness W =
+            // max(marginX, marginY) — a single stroke can't vary per axis
+            // (CSS borders could); max keeps every side at least as thick as
+            // configured. The widget is bigger than the band by GLOW_M so the
+            // Shell.BlurEffect glow fades out inside the widget instead of
+            // being clipped (the bug before: the stroke was centered on the
+            // widget edge, so half the band fell outside and was cut).
             // Must NOT affect struts: a full-work-area actor touching the
             // monitor edges would become a single full-size strut (see
             // _updateRegions in js/ui/layout.js) and collapse the work area.
-            const ring = new St.Widget({
-                x: wa.x + PADDING, y: wa.y + PADDING,
-                width: Math.max(1, wa.width - 2 * PADDING),
-                height: Math.max(1, wa.height - 2 * PADDING),
-                style: `background-color: transparent;
-                    border-left-width: ${marginX}px; border-right-width: ${marginX}px;
-                    border-top-width: ${marginY}px; border-bottom-width: ${marginY}px;
-                    border-color: #ffffff; border-radius: ${RADIUS}px;`,
+            const W = Math.max(marginX, marginY);
+            // small gradient: ~3px soft fade at the inner and outer band
+            // edges, flat colored center (blur radius 2 ≈ 2σ transition).
+            // Wide gradients (radius ∝ W) were tried and rejected — the
+            // center stayed flat but the edges bled too far into the screen.
+            const GLOW_RADIUS = 2;
+            const GLOW_M = GLOW_RADIUS * 3; // ≈ gaussian tail, fades to 0
+            const ringW = Math.max(1, wa.width - 2 * PADDING + 2 * GLOW_M);
+            const ringH = Math.max(1, wa.height - 2 * PADDING + 2 * GLOW_M);
+            const ring = new St.DrawingArea({
+                x: wa.x + PADDING - GLOW_M,
+                y: wa.y + PADDING - GLOW_M,
+                width: ringW, height: ringH,
                 reactive: false, // pointer clicks fall through to windows
+                // real blur filter: crisp band below → smooth cross-band
+                // gradient, color at center to transparent at the edges
+                effect: new Shell.BlurEffect({radius: GLOW_RADIUS}),
+            });
+            ring.connect('repaint', () => {
+                // surface size is physical px; draw in logical px so the
+                // stroke scales cleanly on HiDPI monitors
+                const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+                const [surfW, surfH] = ring.get_surface_size();
+                const cr = ring.get_context();
+                cr.save();
+                cr.scale(scale, scale);
+                const w = surfW / scale;
+                const h = surfH / scale;
+
+                // crisp full-width band, fully inside the widget: spans
+                // [PADDING, PADDING + W] relative to the work area. Fully
+                // opaque — the only softness is the glow radius blur.
+                const inset = GLOW_M + W / 2;
+                cr.setSourceRGBA(CR / 255, CG / 255, CB / 255, 1);
+                cr.setLineWidth(W);
+                roundedRectPath(cr, inset, inset,
+                    Math.max(1, w - 2 * inset), Math.max(1, h - 2 * inset), RADIUS);
+                cr.stroke();
+                cr.restore();
             });
             Main.layoutManager.addChrome(ring);
             Main.layoutManager.uiGroup.set_child_below_sibling(ring, Main.layoutManager.panelBox);

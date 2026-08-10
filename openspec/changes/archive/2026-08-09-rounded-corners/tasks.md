@@ -20,10 +20,10 @@
 
 ## 4. Manual verification
 
-- [ ] 4.1 Shell restart; ring activates on camera use with rounded corners (outer 100 at default width; inner sharp since 100 < 150)
-- [ ] 4.2 Change `border-radius` in prefs while ring active → ring redraws live, no camera toggle needed, no position drift (rebuild loop stays stable)
-- [ ] 4.3 Set radius 0 → sharp corners; set radius 300 → clearly rounded inner corners; set radius 1000 on small monitor → clamped, no crash
-- [ ] 4.4 Resolution mode → per-side thickness still correct with rounded corners
-- [ ] 4.5 Regressions: camera on/off, second camera, v4l2 direct-open, monitor add/remove while active, disable while active, maximized windows shrink/restore, fullscreen keeps ring visible
-- [ ] 4.6 `journalctl -f /usr/bin/gnome-shell` clean of new errors
-- [ ] 4.7 Ring starts below the top bar (band visible, not hidden behind panel) and ends above the task bar; dock added/removed/resized while active → ring follows
+- [x] 4.1 Shell restart; ring activates on camera use with rounded corners (outer 100 at default width; inner sharp since 100 < 150)
+- [x] 4.2 Change `border-radius` in prefs while ring active → ring redraws live, no camera toggle needed, no position drift (rebuild loop stays stable)
+- [x] 4.3 Set radius 0 → sharp corners; set radius 300 → clearly rounded inner corners; set radius 1000 on small monitor → clamped, no crash
+- [x] 4.4 Resolution mode → per-side thickness still correct with rounded corners
+- [x] 4.5 Regressions: camera on/off, second camera, v4l2 direct-open, monitor add/remove while active, disable while active, maximized windows shrink/restore, fullscreen keeps ring visible
+- [x] 4.6 `journalctl -f /usr/bin/gnome-shell` clean of new errors
+- [x] 4.7 Ring starts below the top bar (band visible, not hidden behind panel) and ends above the task bar; dock added/removed/resized while active → ring follows

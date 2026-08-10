@@ -38,7 +38,7 @@ export default class RingLightPreferences extends ExtensionPreferences {
 
         const widthRow = new Adw.SpinRow({
             title: 'Border width',
-            subtitle: 'White ring width around each monitor, in pixels',
+            subtitle: 'Ring width around each monitor, in pixels',
             adjustment: new Gtk.Adjustment({
                 lower: 1,
                 upper: 1000,
@@ -46,6 +46,56 @@ export default class RingLightPreferences extends ExtensionPreferences {
             }),
         });
         settings.bind('border-width', widthRow.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
+
+        // color temperature slider: track painted with the yellow→white ramp
+        // so the slider itself previews the ring color. Title/subtitle are
+        // explicit labels in the body (row-type agnostic), scale below them.
+        const tempRow = new Adw.PreferencesRow();
+        const tempBox = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 6,
+            margin_top: 6,
+            margin_bottom: 6,
+            margin_start: 12, // match libadwaita's row > box.header inset
+            margin_end: 12,
+        });
+        const tempTitle = new Gtk.Label({
+            label: 'Border color temperature',
+            xalign: 0,
+            wrap: true,
+        });
+        tempBox.append(tempTitle);
+        const tempSubtitle = new Gtk.Label({
+            label: 'Warm yellow (2700 K) to daylight white (6500 K); the slider track previews the color',
+            xalign: 0,
+            wrap: true,
+        });
+        tempSubtitle.add_css_class('dim-label');
+        tempBox.append(tempSubtitle);
+        const tempScale = new Gtk.Scale({
+            adjustment: new Gtk.Adjustment({
+                lower: 2700,
+                upper: 6500,
+                step_increment: 100,
+            }),
+            digits: 0, // draw_value label shows the Kelvin value
+            hexpand: true,
+        });
+        settings.bind('border-color-temperature', tempScale.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
+        tempScale.add_css_class('ringlight-scale');
+        const tempCss = new Gtk.CssProvider();
+        tempCss.load_from_string(`scale.ringlight-scale trough {
+            background-image: linear-gradient(to right, #ffa757, #ffb16e, #ffcea6, #fffefa);
+            background-color: transparent;
+            min-height: 8px;
+        }
+        scale.ringlight-scale trough highlight {
+            background: transparent; /* kill the accent-blue fill covering the left of the ramp */
+        }`);
+        Gtk.StyleContext.add_provider_for_display(tempScale.get_display(), tempCss,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
+        tempBox.append(tempScale);
+        tempRow.child = tempBox;
 
         const radiusRow = new Adw.SpinRow({
             title: 'Corner radius',
@@ -103,6 +153,7 @@ export default class RingLightPreferences extends ExtensionPreferences {
 
         group.add(modeRow);
         group.add(widthRow);
+        group.add(tempRow);
         group.add(radiusRow);
         group.add(paddingRow);
         group.add(availWidthRow);

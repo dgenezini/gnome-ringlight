@@ -20,8 +20,8 @@
 
 ## 4. Manual verification
 
-- [ ] 4.1 Full shell restart, ring activates with camera on: pixel mode default looks identical to before
-- [ ] 4.2 Switch to resolution mode in prefs with e.g. 1920×1080 available on a larger monitor: ring thicker on the sides, work area shrinks to the configured available resolution
-- [ ] 4.3 Change available-width/height while ring active: ring rebuilds live without restart
-- [ ] 4.4 Switch back to pixels mode: ring returns to `border-width` behavior
-- [ ] 4.5 Regression: camera on/off, monitor add/remove, disable while active still behave per `camera-triggered-ring` spec
+- [x] 4.1 Full shell restart, ring activates with camera on: pixel mode default looks identical to before
+- [x] 4.2 Switch to resolution mode in prefs with e.g. 1920×1080 available on a larger monitor: ring thicker on the sides, work area shrinks to the configured available resolution
+- [x] 4.3 Change available-width/height while ring active: ring rebuilds live without restart
+- [x] 4.4 Switch back to pixels mode: ring returns to `border-width` behavior
+- [x] 4.5 Regression: camera on/off, monitor add/remove, disable while active still behave per `camera-triggered-ring` spec
