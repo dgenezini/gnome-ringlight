@@ -37,5 +37,10 @@
       <summary>Ring color temperature</summary>
       <description>Color temperature in Kelvin of the ring light, from warm yellow (2700 K) to daylight white (6500 K).</description>
     </key>
+    <key name="ring-mode" type="s">
+      <default>'auto'</default>
+      <summary>Ring mode</summary>
+      <description>How the ring is activated: 'auto' follows the camera, 'always' keeps the ring on, 'off' hides it.</description>
+    </key>
   </schema>
 </schemalist>

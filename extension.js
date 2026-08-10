@@ -15,6 +15,8 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import * as QuickSettings from 'resource:///org/gnome/shell/ui/quickSettings.js';
 
 // Tanner Helland's blackbody approximation: maps a Kelvin color temperature
 // to [r, g, b] components (0-255), spanning the common light temps (2700K
@@ -58,6 +60,13 @@ function roundedRectPath(cr, x, y, w, h, radius) {
 const V4L2_POLL_MS = 1000;
 const V4L2_STREAK_MIN = 2; // consecutive polls before trusting an open
 
+// ring-mode setting values → labels shown in the quick settings toggle
+const RING_MODES = {
+    auto: 'Automatic',
+    always: 'Always On',
+    off: 'Off',
+};
+
 export default class RingLightExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
@@ -67,22 +76,33 @@ export default class RingLightExtension extends Extension {
         });
         this._borders = [];
         this._active = false;
+        this._cameraInUse = false;
+
+        this._modeChangedId = this._settings.connect('changed::ring-mode', () => {
+            this._refresh();
+            this._updateToggle();
+        });
+        this._createToggle();
 
         // same object GNOME Shell's camera indicator binds to
         // (js/ui/status/camera.js): mutter's PipeWire camera monitor
         try {
             this._cameraMonitor = new Shell.CameraMonitor();
         } catch (e) {
-            // no camera monitor to watch: keep the ring always on rather
-            // than silently losing it
-            console.warn('Ring Light: camera monitor unavailable, ring stays on permanently');
-            this._setActive(true);
-            return;
+            // no camera monitor to watch: auto mode keeps the ring on
+            // permanently rather than silently losing it; always/off are
+            // unaffected because they never consult the camera state
+            console.warn('Ring Light: camera monitor unavailable, ring stays on in auto mode');
+            this._cameraInUse = true;
         }
-        this._cameraChangedId = this._cameraMonitor.connect(
-            'notify::cameras-in-use', () =>
-                this._setActive(this._cameraMonitor.cameras_in_use));
-        this._setActive(this._cameraMonitor.cameras_in_use); // initial state
+        if (this._cameraMonitor) {
+            this._cameraChangedId = this._cameraMonitor.connect(
+                'notify::cameras-in-use', () => {
+                    this._cameraInUse = this._cameraMonitor.cameras_in_use;
+                    this._refresh();
+                });
+        }
+        this._refresh(); // initial state
 
         // Browsers bypass PipeWire for video: Firefox/Chrome open /dev/videoX
         // directly, which CameraMonitor never sees. Poll for open camera fds.
@@ -99,11 +119,62 @@ export default class RingLightExtension extends Extension {
             this._v4l2PollId = 0;
         }
         this._settings.disconnect(this._settingsChangedId);
+        this._settings.disconnect(this._modeChangedId);
         if (this._cameraMonitor) {
             this._cameraMonitor.disconnect(this._cameraChangedId);
             this._cameraMonitor = null;
         }
+        this._toggle.destroy();
+        this._toggle = null;
+        this._indicator.destroy();
+        this._indicator = null;
         this._setActive(false); // removes chrome + disconnects monitors-changed
+    }
+
+    // single source of truth for ring visibility: mode gates the camera
+    // state. Every input (camera notify, v4l2 poll, ring-mode change)
+    // funnels through here.
+    _refresh() {
+        const mode = this._settings.get_string('ring-mode');
+        this._setActive(mode !== 'off' && (mode === 'always' || this._cameraInUse));
+    }
+
+    // Quick Settings toggle (the popover with wifi/bluetooth/dnd), same
+    // pattern as Caffeine: an invisible SystemIndicator carrying one
+    // QuickMenuToggle. Body click and the chevron both open the mode menu;
+    // the toggle is not a switch — three states don't map onto one.
+    _createToggle() {
+        const toggle = new QuickSettings.QuickMenuToggle({
+            title: 'Ring Light',
+            iconName: 'camera-video-symbolic',
+            toggleMode: false, // clicking must open the menu, not flip state
+        });
+        toggle.menu.setHeader('camera-video-symbolic', 'Ring Light');
+        this._modeItems = {};
+        for (const [mode, label] of Object.entries(RING_MODES)) {
+            const item = toggle.menu.addAction(label, () => {
+                this._settings.set_string('ring-mode', mode);
+                toggle.menu.close();
+            });
+            this._modeItems[mode] = item;
+        }
+        toggle.connect('clicked', () => toggle.menu.open());
+        this._toggle = toggle;
+        const indicator = new QuickSettings.SystemIndicator();
+        indicator.quickSettingsItems.push(toggle);
+        Main.panel.statusArea.quickSettings.addExternalIndicator(indicator);
+        this._indicator = indicator;
+        this._updateToggle();
+    }
+
+    _updateToggle() {
+        const mode = this._settings.get_string('ring-mode');
+        // auto/always can light the ring, so they show the enabled color;
+        // off is the only disabled-looking state
+        this._toggle.checked = mode !== 'off';
+        this._toggle.subtitle = RING_MODES[mode];
+        for (const [m, item] of Object.entries(this._modeItems))
+            item.setOrnament(m === mode ? PopupMenu.Ornament.CHECK : PopupMenu.Ornament.NONE);
     }
 
     _setActive(active) {
@@ -126,6 +197,8 @@ export default class RingLightExtension extends Extension {
     }
 
     _v4l2Poll() {
+        if (this._settings.get_string('ring-mode') !== 'auto' || !this._cameraMonitor)
+            return; // outside auto mode (or without a monitor) the camera can't affect the ring
         if (this._cameraMonitor.cameras_in_use)
             return; // already on via PipeWire, nothing to add
         const inUse = this._v4l2InUse();
@@ -133,7 +206,8 @@ export default class RingLightExtension extends Extension {
         // apps briefly probe /dev/video* at startup; trust only a persistent open
         if (inUse && this._v4l2Streak < V4L2_STREAK_MIN)
             return;
-        this._setActive(inUse);
+        this._cameraInUse = inUse;
+        this._refresh();
     }
 
     // stat() on /proc/PID/fd/N follows the magic link to the open file, so
