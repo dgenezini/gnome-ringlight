@@ -1,11 +1,15 @@
 ## ADDED Requirements
 
 ### Requirement: Ring fades out around the pointer
-While the ring is active, the visible ring SHALL fade to transparent inside a circular region centered on the pointer, so the cursor is never covered by the ring. The transition SHALL be smooth: alpha SHALL be multiplied by `smoothstep(radius − fade, radius, distance(pointer, pixel))`, where `radius` and `fade` are the configured cursor radius and fade width — alpha 0 at the cursor, full beyond the radius, ramping over the fade width. The hole SHALL track the pointer live while it moves, SHALL be correct on every monitor and continuous across monitor boundaries, and SHALL be correct on HiDPI (scaled) monitors. Only the visible ring is affected: strut reservation, click-through (`reactive: false`), and work-area shrinking SHALL be unchanged.
+While the ring is active and the pointer is over a ring band, the visible ring SHALL fade to transparent inside a circular region centered on the pointer, so the cursor is never covered by the ring. When the pointer is inside the ring's interior (the work area the ring surrounds), the ring SHALL render fully visible with no hole, regardless of pointer distance to the band. The transition SHALL be smooth: alpha SHALL be multiplied by `smoothstep(radius − fade, radius, distance(pointer, pixel))`, where `radius` and `fade` are the configured cursor radius and fade width — alpha 0 at the cursor, full beyond the radius, ramping over the fade width. The hole SHALL track the pointer live while it moves, SHALL be correct on every monitor and continuous across monitor boundaries, and SHALL be correct on HiDPI (scaled) monitors. Only the visible ring is affected: strut reservation, click-through (`reactive: false`), and work-area shrinking SHALL be unchanged.
 
 #### Scenario: Cursor over the ring
 - **WHEN** the ring is active and the pointer is over a ring band
 - **THEN** the ring is transparent within the cursor radius around the pointer, with a smooth edge over the fade width, and pointer events still pass through to the window below
+
+#### Scenario: Cursor inside the ring
+- **WHEN** the ring is active and the pointer is inside the ring's interior
+- **THEN** the ring renders exactly as without the feature, with no hole anywhere
 
 #### Scenario: Cursor away from the ring
 - **WHEN** the ring is active and the pointer is farther than the cursor radius from every ring band

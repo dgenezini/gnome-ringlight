@@ -21,33 +21,7 @@ export default class RingLightPreferences extends ExtensionPreferences {
 
         const page = new Adw.PreferencesPage();
         const ringGroup = new Adw.PreferencesGroup({title: 'Ring'});
-        const widthGroup = new Adw.PreferencesGroup({title: 'Width'});
         const cursorGroup = new Adw.PreferencesGroup({title: 'Cursor'});
-
-        const modeRow = new Adw.ComboRow({
-            title: 'Ring width mode',
-            subtitle: 'Fixed pixels, or derived from an available area resolution',
-            model: new Gtk.StringList({strings: ['Pixels', 'Available resolution']}),
-        });
-        // settings → row
-        const updateMode = () =>
-            modeRow.selected = settings.get_string('width-mode') === 'resolution' ? 1 : 0;
-        settings.connect('changed::width-mode', updateMode);
-        updateMode();
-        // row → settings
-        modeRow.connect('notify::selected', () =>
-            settings.set_string('width-mode', modeRow.selected === 1 ? 'resolution' : 'pixels'));
-
-        const widthRow = new Adw.SpinRow({
-            title: 'Ring width',
-            subtitle: 'Ring width around each monitor, in pixels',
-            adjustment: new Gtk.Adjustment({
-                lower: 1,
-                upper: 1000,
-                step_increment: 10,
-            }),
-        });
-        settings.bind('ring-width', widthRow.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
 
         // color temperature slider: track painted with the yellow→white ramp
         // so the slider itself previews the ring color. Title/subtitle are
@@ -113,11 +87,7 @@ export default class RingLightPreferences extends ExtensionPreferences {
             return row;
         };
         const brightnessRow = percentageRow(
-            'Brightness', 'Maximum ring opacity, as a percentage', 'brightness');
-        const softnessRow = percentageRow(
-            'Softness', 'Gradient transition width; 0% is a hard edge', 'softness');
-        const glowRow = percentageRow(
-            'Glow', 'Outer glow strength and spread; 0% disables it', 'glow');
+            'Brightness', 'Light intensity, as a percentage', 'brightness');
 
         const radiusRow = new Adw.SpinRow({
             title: 'Corner radius',
@@ -130,20 +100,9 @@ export default class RingLightPreferences extends ExtensionPreferences {
         });
         settings.bind('ring-radius', radiusRow.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
 
-        const paddingRow = new Adw.SpinRow({
-            title: 'Outside padding',
-            subtitle: 'Gap between the ring and the monitor edges (top bar/docks), in pixels',
-            adjustment: new Gtk.Adjustment({
-                lower: 0,
-                upper: 1000,
-                step_increment: 1,
-            }),
-        });
-        settings.bind('padding', paddingRow.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
-
         const cursorEnabledRow = new Adw.SwitchRow({
             title: 'Cursor transparency',
-            subtitle: 'Fade the ring out around the pointer so it never covers the cursor',
+            subtitle: 'Fade the ring out under the pointer while it sits on the ring',
         });
         settings.bind('cursor-transparency', cursorEnabledRow, 'active', Gio.SettingsBindFlags.DEFAULT);
 
@@ -169,38 +128,6 @@ export default class RingLightPreferences extends ExtensionPreferences {
         });
         settings.bind('cursor-fade', cursorFadeRow.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
 
-        const availWidthRow = new Adw.SpinRow({
-            title: 'Available width',
-            subtitle: 'Desired work area width; ring width derived from it (monitor width − this, halved per side)',
-            adjustment: new Gtk.Adjustment({
-                lower: 1,
-                upper: 16384,
-                step_increment: 10,
-            }),
-        });
-        settings.bind('available-width', availWidthRow.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
-
-        const availHeightRow = new Adw.SpinRow({
-            title: 'Available height',
-            subtitle: 'Desired work area height; ring width derived from it (monitor height − this, halved per side)',
-            adjustment: new Gtk.Adjustment({
-                lower: 1,
-                upper: 16384,
-                step_increment: 10,
-            }),
-        });
-        settings.bind('available-height', availHeightRow.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
-
-        // show only the rows for the active mode
-        const updateVisibility = () => {
-            const resMode = settings.get_string('width-mode') === 'resolution';
-            widthRow.visible = !resMode;
-            availWidthRow.visible = resMode;
-            availHeightRow.visible = resMode;
-        };
-        settings.connect('changed::width-mode', updateVisibility);
-        updateVisibility();
-
         // radius/fade only matter while cursor transparency is on
         const updateCursorSensitivity = () => {
             const enabled = settings.get_boolean('cursor-transparency');
@@ -212,22 +139,13 @@ export default class RingLightPreferences extends ExtensionPreferences {
 
         ringGroup.add(tempRow);
         ringGroup.add(brightnessRow);
-        ringGroup.add(softnessRow);
-        ringGroup.add(glowRow);
         ringGroup.add(radiusRow);
-        ringGroup.add(paddingRow);
-
-        widthGroup.add(modeRow);
-        widthGroup.add(widthRow);
-        widthGroup.add(availWidthRow);
-        widthGroup.add(availHeightRow);
 
         cursorGroup.add(cursorEnabledRow);
         cursorGroup.add(cursorRadiusRow);
         cursorGroup.add(cursorFadeRow);
 
         page.add(ringGroup);
-        page.add(widthGroup);
         page.add(cursorGroup);
         window.add(page);
     }

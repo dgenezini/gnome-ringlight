@@ -1,35 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
   <schema id="org.gnome.shell.extensions.ringlight" path="/org/gnome/shell/extensions/ringlight/">
-    <key name="ring-width" type="i">
-      <default>90</default>
-      <summary>Ring width</summary>
-      <description>Width in logical pixels of the white ring around each monitor.</description>
-    </key>
     <key name="ring-radius" type="i">
       <default>120</default>
       <summary>Corner radius</summary>
       <description>Radius in logical pixels of the ring's rounded corners; 0 for sharp corners. The inner corner radius is this minus the ring width.</description>
-    </key>
-    <key name="padding" type="i">
-      <default>10</default>
-      <summary>Outside padding</summary>
-      <description>Gap in logical pixels between the ring and the monitor edges, including the top bar and docks.</description>
-    </key>
-    <key name="width-mode" type="s">
-      <default>'pixels'</default>
-      <summary>Ring width mode</summary>
-      <description>How the ring width is defined: 'pixels' uses ring-width, 'resolution' derives it from the available area resolution.</description>
-    </key>
-    <key name="available-width" type="i">
-      <default>1920</default>
-      <summary>Available width</summary>
-      <description>Desired work area width in logical pixels; ring width is derived from it in resolution mode.</description>
-    </key>
-    <key name="available-height" type="i">
-      <default>1080</default>
-      <summary>Available height</summary>
-      <description>Desired work area height in logical pixels; ring width is derived from it in resolution mode.</description>
     </key>
     <key name="ring-color-temperature" type="i">
       <default>6500</default>
@@ -43,36 +18,24 @@
       <summary>Ring brightness</summary>
       <description>Maximum opacity of the ring light, as a percentage.</description>
     </key>
-    <key name="softness" type="i">
-      <default>25</default>
-      <range min="0" max="100"/>
-      <summary>Ring softness</summary>
-      <description>Width of gradient transitions in the ring light, as a percentage.</description>
-    </key>
-    <key name="glow" type="i">
-      <default>30</default>
-      <range min="0" max="100"/>
-      <summary>Ring glow</summary>
-      <description>Strength and spread of the medium and outer ring glow, as a percentage.</description>
-    </key>
     <key name="ring-mode" type="s">
       <default>'auto'</default>
       <summary>Ring mode</summary>
       <description>How the ring is activated: 'auto' follows the camera, 'always' keeps the ring on, 'off' hides it.</description>
     </key>
     <key name="cursor-transparency" type="b">
-      <default>true</default>
+      <default>false</default>
       <summary>Cursor transparency</summary>
-      <description>Whether the ring fades out around the pointer so it never covers the cursor. Disabling removes the cursor hole entirely.</description>
+      <description>Whether the ring fades out around the pointer so it never covers the cursor. Off by default so the light stays continuous during calls; the hole only appears while the pointer is on the ring band.</description>
     </key>
     <key name="cursor-radius" type="i">
-      <default>230</default>
+      <default>100</default>
       <range min="0" max="1000"/>
       <summary>Cursor radius</summary>
       <description>Radius in logical pixels of the circle around the pointer where the ring fades out; 0 disables cursor avoidance.</description>
     </key>
     <key name="cursor-fade" type="i">
-      <default>150</default>
+      <default>60</default>
       <range min="0" max="1000"/>
       <summary>Cursor fade</summary>
       <description>Soft-edge width of the cursor hole in logical pixels; 0 gives a hard circular edge.</description>

@@ -1,4 +1,4 @@
-# Ring Light
+# GNOME Ring Light
 
 GNOME Shell extension that draws a white border around every monitor. The ring
 reserves space like the top bar does (chrome struts), so maximized, tiled, and

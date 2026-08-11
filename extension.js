@@ -45,9 +45,13 @@ function temperatureToRGB(kelvin) {
     return [r, g, b].map(clamp);
 }
 
-// One fragment shader paints core plus medium and outer glow. `ringDistance`
-// is negative inside the rounded band, positive outside it; its SDF curves
-// make corners radial instead of joining four rectangular gradients.
+// One fragment shader paints a macOS-style edge light: an opaque white core
+// hugging the work-area edge plus a cool-white halo tailing into the work
+// area (and a short outward ramp toward the monitor edge). `s` is the
+// distance from the work-area edge (the outer rect), positive inward; the
+// rounded-rect SDFs make corners radial. Profile widths are fixed logical
+// px (uniforms arrive already scaled): ~50px core, ~200px total footprint,
+// matching the reference light.
 const RING_SHADER = `
 uniform sampler2D tex;
 uniform float u_width;
@@ -56,19 +60,17 @@ uniform float u_outer_left;
 uniform float u_outer_top;
 uniform float u_outer_right;
 uniform float u_outer_bottom;
+uniform float u_outer_radius;
 uniform float u_inner_left;
 uniform float u_inner_top;
 uniform float u_inner_right;
 uniform float u_inner_bottom;
-uniform float u_outer_radius;
 uniform float u_inner_radius;
-uniform float u_min_thickness;
 uniform float u_red;
 uniform float u_green;
 uniform float u_blue;
 uniform float u_brightness;
-uniform float u_softness;
-uniform float u_glow;
+uniform float u_band;
 uniform float u_mouse_x;
 uniform float u_mouse_y;
 uniform float u_cursor_radius;
@@ -87,33 +89,55 @@ void main() {
         vec2(u_outer_right, u_outer_bottom), u_outer_radius);
     float inner = roundedRectSdf(point, vec2(u_inner_left, u_inner_top),
         vec2(u_inner_right, u_inner_bottom), u_inner_radius);
-    float ringDistance = max(outer, -inner);
-    float insideDepth = max(0.0, -ringDistance);
-    // soft mask: the band fades over the softness width (a fraction of the
-    // ring thickness, same knob as the glow) instead of a hard 1px AA line;
-    // smoothstep gives an S-curve like the cursor hole
-    float edge = max(1.0, u_min_thickness * u_softness);
-    float inside = 1.0 - smoothstep(-edge, edge, ringDistance);
-    // Glow consumes width from both band edges, leaving a bright core in the
-    // center. Keep a 20px core where the configured width permits it. The
-    // curve is a single C2-smooth quintic: zero at both band edges (no hard
-    // line), full at the core — no slope joins to band.
-    float maxGlow = max(0.0, (u_min_thickness - 20.0) * 0.5);
-    float glowWidth = min(100.0 * u_glow * (2.0 * u_softness), maxGlow);
-    float progress = glowWidth > 0.01 ?
-        clamp(insideDepth / glowWidth, 0.0, 1.0) : 1.0;
-    float glow = progress * progress * progress *
-        (progress * (progress * 6.0 - 15.0) + 10.0);
-    float alpha = glow * inside * u_brightness;
+    float s = -outer; // distance from the work-area edge, inward positive
+
+    // symmetric light profile centered in the reserved band: opaque core
+    // with equal glow tails fading to both band edges, like the reference
+    float band = max(u_band, 2.0);
+    float coreHalf = min(25.0, band * 0.5);
+    float glowHalf = max(coreHalf + 1.0, band * 0.5);
+    float d = abs(s - band * 0.5); // distance from the core center
+
+    float core = 1.0 - smoothstep(coreHalf, coreHalf + 8.0, d);
+    float glow = 1.0 - smoothstep(coreHalf, glowHalf, d);
+
+    float coreA = core * u_brightness;
+    float haloA = glow * u_brightness * 0.5;
+    float alpha = max(coreA, haloA);
+
+    // keep the light inside the reserved band: fade out at the inner rect
+    // so the glow never paints over window content
+    alpha *= 1.0 - smoothstep(0.0, 4.0, -inner);
+
+    // halo tint: cool blue like the reference light, keeping the hue
+    vec3 coreColor = vec3(u_red, u_green, u_blue);
+    vec3 haloColor = coreColor * vec3(0.55, 0.82, 1.0);
+    vec3 color = coreA >= haloA ? coreColor : haloColor;
     // pointer avoidance: fade the ring out inside a circle around the
     // cursor so it never covers the pointer; smoothstep ramps alpha from
-    // 0 at the cursor (or radius−fade from it) to full at the radius
+    // 0 at the cursor (or radius−fade from it) to full at the radius.
+    // The hole is carved only while the ring is actually visible under
+    // the pointer: evaluate the light profile at the cursor and skip the
+    // hole where it is absent — outside the work area (top bar, bezels),
+    // in the interior, and in the faint ramps at the band edges. So the
+    // hole never trails the pointer once it leaves the ring.
+    float sCursor = -roundedRectSdf(vec2(u_mouse_x, u_mouse_y),
+        vec2(u_outer_left, u_outer_top), vec2(u_outer_right, u_outer_bottom), u_outer_radius);
     if (u_cursor_radius > 0.0) {
-        float d = distance(point, vec2(u_mouse_x, u_mouse_y));
-        alpha *= smoothstep(u_cursor_radius - u_cursor_fade, u_cursor_radius, d);
+        float dCursor = abs(sCursor - band * 0.5);
+        float cursorCore = 1.0 - smoothstep(coreHalf, coreHalf + 8.0, dCursor);
+        float cursorGlow = 1.0 - smoothstep(coreHalf, glowHalf, dCursor);
+        float cursorAlpha = max(cursorCore, cursorGlow * 0.5) * u_brightness;
+        float innerAtCursor = roundedRectSdf(vec2(u_mouse_x, u_mouse_y),
+            vec2(u_inner_left, u_inner_top), vec2(u_inner_right, u_inner_bottom), u_inner_radius);
+        cursorAlpha *= 1.0 - smoothstep(0.0, 4.0, -innerAtCursor);
+        if (cursorAlpha > 0.1) {
+            float d = distance(point, vec2(u_mouse_x, u_mouse_y));
+            alpha *= smoothstep(u_cursor_radius - u_cursor_fade, u_cursor_radius, d);
+        }
     }
     vec4 source = texture2D(tex, cogl_tex_coord_in[0].st);
-    cogl_color_out = vec4(u_red, u_green, u_blue, 1.0) * alpha * source.a;
+    cogl_color_out = vec4(color, 1.0) * alpha * source.a;
 }`;
 
 const RingShaderEffect = GObject.registerClass(
@@ -197,12 +221,32 @@ export default class RingLightExtension extends Extension {
             if (this._active && this._cursorUniforms.radius > 0)
                 this._updateCursorUniforms();
         });
+        // fallback: stage motion events stop while the pointer is over an
+        // app window (the app consumes them), freezing the hole on the
+        // ring. Re-read the pointer on a timer — mutter tracks it globally
+        // — and update only when it actually moved.
+        this._pointerPollId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
+            if (this._active && this._cursorUniforms.radius > 0) {
+                try {
+                    const [px, py] = global.display.get_pointer_info().get_position();
+                    if (!this._cursorPos || px !== this._cursorPos[0] || py !== this._cursorPos[1]) {
+                        this._cursorPos = [px, py];
+                        this._updateCursorUniforms();
+                    }
+                } catch (e) {
+                }
+            }
+            return GLib.SOURCE_CONTINUE;
+        });
+        // TEMP DEBUG
+        this._dbgLast = 0;
 
         // Browsers bypass PipeWire for video: Firefox/Chrome open /dev/videoX
         // directly, which CameraMonitor never sees. Poll for open camera fds.
         this._v4l2Streak = 0;
+        this._lastWorkAreas = null;
         this._v4l2PollId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, V4L2_POLL_MS, () => {
-            this._v4l2Poll();
+            this._poll();
             return GLib.SOURCE_CONTINUE;
         });
     }
@@ -211,6 +255,10 @@ export default class RingLightExtension extends Extension {
         if (this._motionId) {
             global.stage.disconnect(this._motionId);
             this._motionId = 0;
+        }
+        if (this._pointerPollId) {
+            GLib.source_remove(this._pointerPollId);
+            this._pointerPollId = 0;
         }
         if (this._v4l2PollId) {
             GLib.source_remove(this._v4l2PollId);
@@ -294,7 +342,12 @@ export default class RingLightExtension extends Extension {
         }
     }
 
-    _v4l2Poll() {
+    // Struts arrive after the ring's first build (a bottom taskbar registers
+    // its space once the shell settles, after login) and no signal fires for
+    // that — so watch the work area each tick and rebuild when it moves.
+    _poll() {
+        if (this._active && this._workAreasChanged())
+            this._build();
         if (this._settings.get_string('ring-mode') !== 'auto' || !this._cameraMonitor)
             return; // outside auto mode (or without a monitor) the camera can't affect the ring
         if (this._cameraMonitor.cameras_in_use)
@@ -306,6 +359,23 @@ export default class RingLightExtension extends Extension {
             return;
         this._cameraInUse = inUse;
         this._refresh();
+    }
+
+    // work-area snapshot across monitors; a bar/dock registering its struts
+    // changes it, which is the signal that the ring needs a rebuild
+    _workAreasString() {
+        return Main.layoutManager.monitors
+            .map(m => Main.layoutManager.getWorkAreaForMonitor(m.index))
+            .map(wa => `${wa.x},${wa.y},${wa.width},${wa.height}`)
+            .join(';');
+    }
+
+    _workAreasChanged() {
+        const areas = this._workAreasString();
+        if (areas === this._lastWorkAreas)
+            return false;
+        this._lastWorkAreas = areas;
+        return true;
     }
 
     // stat() on /proc/PID/fd/N follows the magic link to the open file, so
@@ -354,9 +424,12 @@ export default class RingLightExtension extends Extension {
     }
 
     _build() {
+        // TEMP DEBUG
+        console.log('RL build', new Error().stack.split('\n').slice(1, 3).join(' | '));
         for (const a of this._borders)
             Main.layoutManager.removeChrome(a);
         this._borders = [];
+        this._rings = []; // rebuilt from scratch; stale rings from a prior build die here
 
         // removeChrome only *queues* the strut recompute (BEFORE_REDRAW
         // late). The work-area query below must see the bars but not our
@@ -366,14 +439,12 @@ export default class RingLightExtension extends Extension {
         if (typeof Main.layoutManager._updateRegions === 'function')
             Main.layoutManager._updateRegions();
 
-        const mode = this._settings.get_string('width-mode');
-        const BORDER = this._settings.get_int('ring-width');
+        // fixed light footprint: opaque core (50px) + glow tail to 100px —
+        // windows sit right at the glow's edge
+        const LIGHT_W = 100;
         const RADIUS = this._settings.get_int('ring-radius');
-        const PADDING = this._settings.get_int('padding');
         const [CR, CG, CB] = temperatureToRGB(this._settings.get_int('ring-color-temperature'));
         const BRIGHTNESS = this._settings.get_int('brightness') / 100;
-        const SOFTNESS = this._settings.get_int('softness') / 100;
-        const GLOW = this._settings.get_int('glow') / 100;
 
         // pointer-avoidance state: cache the scaled radius/fade (the motion
         // handler only refreshes x/y) and seed the hole at the current
@@ -391,16 +462,19 @@ export default class RingLightExtension extends Extension {
             }
         }
 
+        const baseline = [];
         for (const m of Main.layoutManager.monitors) {
+            // monitors can be transiently undefined while layout changes
+            // (login, hotplug) — skip instead of crashing mid-build
+            if (!m)
+                continue;
             // mutter 18 dropped Meta.Monitor.geometry; the layout manager
             // Monitor objects now expose x/y/width/height directly
             const {x, y, width, height} = m.geometry ?? m;
 
-            // resolution mode: ring thickness per axis = (monitor − available) / 2
-            const marginX = mode === 'resolution' ?
-                Math.max(1, Math.round((width - this._settings.get_int('available-width')) / 2)) : BORDER;
-            const marginY = mode === 'resolution' ?
-                Math.max(1, Math.round((height - this._settings.get_int('available-height')) / 2)) : BORDER;
+            // ring hugs the work area edge: same thickness on all sides
+            const marginX = LIGHT_W;
+            const marginY = LIGHT_W;
 
             // work area = monitor minus what bars/docks reserve (their
             // struts). The ring hugs it, so the band starts after the top
@@ -412,40 +486,39 @@ export default class RingLightExtension extends Extension {
             const left = Math.max(0, wa.x - x);
             const right = Math.max(0, x + width - (wa.x + wa.width));
 
-            // Visual ring is non-strut chrome: its white source surface is
-            // recolored and made transparent entirely by one shader. Glow is
-            // clipped to this band; transparent struts reserve its margins.
-            const shapeW = Math.max(1, wa.width - 2 * PADDING);
-            const shapeH = Math.max(1, wa.height - 2 * PADDING);
-            const ringW = shapeW;
-            const ringH = shapeH;
+            baseline.push(`${wa.x + marginX},${wa.y + marginY},` +
+                `${wa.width - 2 * marginX},${wa.height - 2 * marginY}`);
+
+            // Visual light is non-strut chrome: the actor spans the full
+            // monitor so the halo can bleed outward to the monitor edges;
+            // its white source surface is recolored and made transparent
+            // entirely by one shader anchored at the work-area rect.
+            // Transparent struts (below) reserve the work area.
+            const shapeW = Math.max(1, wa.width);
+            const shapeH = Math.max(1, wa.height);
             const innerW = Math.max(1, shapeW - 2 * marginX);
             const innerH = Math.max(1, shapeH - 2 * marginY);
             const effect = new RingShaderEffect({
-                u_width: ringW * scale,
-                u_height: ringH * scale,
-                u_outer_left: 0,
-                u_outer_top: 0,
-                u_outer_right: shapeW * scale,
-                u_outer_bottom: shapeH * scale,
-                u_inner_left: ((shapeW - innerW) / 2) * scale,
-                u_inner_top: ((shapeH - innerH) / 2) * scale,
-                u_inner_right: ((shapeW + innerW) / 2) * scale,
-                u_inner_bottom: ((shapeH + innerH) / 2) * scale,
+                u_width: width * scale,
+                u_height: height * scale,
+                u_outer_left: left * scale,
+                u_outer_top: top * scale,
+                u_outer_right: (left + shapeW) * scale,
+                u_outer_bottom: (top + shapeH) * scale,
+                u_inner_left: (left + marginX) * scale,
+                u_inner_top: (top + marginY) * scale,
+                u_inner_right: (left + marginX + innerW) * scale,
+                u_inner_bottom: (top + marginY + innerH) * scale,
                 u_outer_radius: RADIUS * scale,
                 u_inner_radius: Math.max(0, RADIUS - Math.max(marginX, marginY)) * scale,
-                u_min_thickness: Math.min(marginX, marginY) * scale,
                 u_red: CR / 255,
                 u_green: CG / 255,
                 u_blue: CB / 255,
                 u_brightness: BRIGHTNESS,
-                u_softness: SOFTNESS,
-                u_glow: GLOW,
+                u_band: Math.min(marginX, marginY) * scale,
             });
             const ring = new St.Widget({
-                x: wa.x + PADDING,
-                y: wa.y + PADDING,
-                width: ringW, height: ringH,
+                x, y, width, height,
                 reactive: false, // pointer clicks fall through to windows
                 style: 'background-color: white;', // source alpha for shader
                 effect,
@@ -460,16 +533,16 @@ export default class RingLightExtension extends Extension {
             // A strut only counts when the actor touches a monitor edge
             // (_updateRegions picks the side from the edges it touches), so
             // each strip spans from the monitor edge over the bar's reserved
-            // space plus the padding plus the ring thickness.
+            // space plus the ring thickness.
             const edges = [
-                {x, y, width, height: top + PADDING + marginY},                                        // top
-                {x, y: y + height - bottom - PADDING - marginY, width,
-                    height: bottom + PADDING + marginY},                                               // bottom
-                {x, y: wa.y + PADDING + marginY, width: left + PADDING + marginX,
-                    height: Math.max(1, wa.height - 2 * (PADDING + marginY))},                         // left
-                {x: wa.x + wa.width - PADDING - marginX, y: wa.y + PADDING + marginY,
-                    width: right + PADDING + marginX,
-                    height: Math.max(1, wa.height - 2 * (PADDING + marginY))},                         // right
+                {x, y, width, height: top + marginY},                                        // top
+                {x, y: y + height - bottom - marginY, width,
+                    height: bottom + marginY},                                               // bottom
+                {x, y: wa.y + marginY, width: left + marginX,
+                    height: Math.max(1, wa.height - 2 * marginY)},                           // left
+                {x: wa.x + wa.width - marginX, y: wa.y + marginY,
+                    width: right + marginX,
+                    height: Math.max(1, wa.height - 2 * marginY)},                           // right
             ];
 
             for (const e of edges) {
@@ -486,6 +559,14 @@ export default class RingLightExtension extends Extension {
                 this._borders.push(a);
             }
         }
+        // baseline for the work-area poll: what getWorkAreaForMonitor reports
+        // once the strut strips settle. Each strip reserves marginX/Y beyond
+        // the bar's space on its edge, so the settled live area reads wa
+        // shrunk by that constant — snapshot it arithmetically instead of
+        // reading it live (fresh strips have no allocation yet, and
+        // _updateRegions computes struts from allocations, so a live read
+        // would snapshot a stale area and the poll would rebuild every tick)
+        this._lastWorkAreas = baseline.join(';');
         this._updateCursorUniforms();
     }
 
@@ -495,6 +576,13 @@ export default class RingLightExtension extends Extension {
         if (!this._cursorPos || this._rings.length === 0)
             return;
         const [cx, cy] = this._cursorPos;
+        // TEMP DEBUG
+        const now = Date.now();
+        if (now - this._dbgLast > 1000) {
+            this._dbgLast = now;
+            console.log('RL ucu', cx.toFixed(0), cy.toFixed(0), 'active', this._active,
+                'r', this._cursorUniforms.radius, 'rings', this._rings.length);
+        }
         for (const {widget, effect} of this._rings) {
             this._setFloatUniform(effect, 'u_mouse_x', (cx - widget.x) * this._scale);
             this._setFloatUniform(effect, 'u_mouse_y', (cy - widget.y) * this._scale);
