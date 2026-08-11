@@ -60,6 +60,11 @@
       <summary>Ring mode</summary>
       <description>How the ring is activated: 'auto' follows the camera, 'always' keeps the ring on, 'off' hides it.</description>
     </key>
+    <key name="cursor-transparency" type="b">
+      <default>true</default>
+      <summary>Cursor transparency</summary>
+      <description>Whether the ring fades out around the pointer so it never covers the cursor. Disabling removes the cursor hole entirely.</description>
+    </key>
     <key name="cursor-radius" type="i">
       <default>230</default>
       <range min="0" max="1000"/>

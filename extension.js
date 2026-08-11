@@ -89,8 +89,11 @@ void main() {
         vec2(u_inner_right, u_inner_bottom), u_inner_radius);
     float ringDistance = max(outer, -inner);
     float insideDepth = max(0.0, -ringDistance);
-    // One physical-pixel coverage transition anti-aliases SDF edges.
-    float inside = 1.0 - smoothstep(-1.0, 1.0, ringDistance);
+    // soft mask: the band fades over the softness width (a fraction of the
+    // ring thickness, same knob as the glow) instead of a hard 1px AA line;
+    // smoothstep gives an S-curve like the cursor hole
+    float edge = max(1.0, u_min_thickness * u_softness);
+    float inside = 1.0 - smoothstep(-edge, edge, ringDistance);
     // Glow consumes width from both band edges, leaving a bright core in the
     // center. Keep a 20px core where the configured width permits it. The
     // curve is a single C2-smooth quintic: zero at both band edges (no hard
@@ -377,8 +380,9 @@ export default class RingLightExtension extends Extension {
         // pointer, so it is correct the moment the ring appears
         const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
         this._scale = scale;
-        this._cursorUniforms.radius = this._settings.get_int('cursor-radius') * scale;
-        this._cursorUniforms.fade = this._settings.get_int('cursor-fade') * scale;
+        const cursorOn = this._settings.get_boolean('cursor-transparency');
+        this._cursorUniforms.radius = cursorOn ? this._settings.get_int('cursor-radius') * scale : 0;
+        this._cursorUniforms.fade = cursorOn ? this._settings.get_int('cursor-fade') * scale : 0;
         if (!this._cursorPos) {
             try {
                 this._cursorPos = global.display.get_pointer_info().get_position();

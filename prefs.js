@@ -20,7 +20,9 @@ export default class RingLightPreferences extends ExtensionPreferences {
         const settings = this.getSettings();
 
         const page = new Adw.PreferencesPage();
-        const group = new Adw.PreferencesGroup({title: 'Ring'});
+        const ringGroup = new Adw.PreferencesGroup({title: 'Ring'});
+        const widthGroup = new Adw.PreferencesGroup({title: 'Width'});
+        const cursorGroup = new Adw.PreferencesGroup({title: 'Cursor'});
 
         const modeRow = new Adw.ComboRow({
             title: 'Ring width mode',
@@ -139,6 +141,12 @@ export default class RingLightPreferences extends ExtensionPreferences {
         });
         settings.bind('padding', paddingRow.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
 
+        const cursorEnabledRow = new Adw.SwitchRow({
+            title: 'Cursor transparency',
+            subtitle: 'Fade the ring out around the pointer so it never covers the cursor',
+        });
+        settings.bind('cursor-transparency', cursorEnabledRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+
         const cursorRadiusRow = new Adw.SpinRow({
             title: 'Cursor radius',
             subtitle: 'Ring fades out inside this circle around the pointer, in pixels. 0 disables',
@@ -193,19 +201,34 @@ export default class RingLightPreferences extends ExtensionPreferences {
         settings.connect('changed::width-mode', updateVisibility);
         updateVisibility();
 
-        group.add(modeRow);
-        group.add(widthRow);
-        group.add(tempRow);
-        group.add(brightnessRow);
-        group.add(softnessRow);
-        group.add(glowRow);
-        group.add(radiusRow);
-        group.add(paddingRow);
-        group.add(cursorRadiusRow);
-        group.add(cursorFadeRow);
-        group.add(availWidthRow);
-        group.add(availHeightRow);
-        page.add(group);
+        // radius/fade only matter while cursor transparency is on
+        const updateCursorSensitivity = () => {
+            const enabled = settings.get_boolean('cursor-transparency');
+            cursorRadiusRow.sensitive = enabled;
+            cursorFadeRow.sensitive = enabled;
+        };
+        settings.connect('changed::cursor-transparency', updateCursorSensitivity);
+        updateCursorSensitivity();
+
+        ringGroup.add(tempRow);
+        ringGroup.add(brightnessRow);
+        ringGroup.add(softnessRow);
+        ringGroup.add(glowRow);
+        ringGroup.add(radiusRow);
+        ringGroup.add(paddingRow);
+
+        widthGroup.add(modeRow);
+        widthGroup.add(widthRow);
+        widthGroup.add(availWidthRow);
+        widthGroup.add(availHeightRow);
+
+        cursorGroup.add(cursorEnabledRow);
+        cursorGroup.add(cursorRadiusRow);
+        cursorGroup.add(cursorFadeRow);
+
+        page.add(ringGroup);
+        page.add(widthGroup);
+        page.add(cursorGroup);
         window.add(page);
     }
 }
