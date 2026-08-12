@@ -45,6 +45,10 @@ function temperatureToRGB(kelvin) {
     return [r, g, b].map(clamp);
 }
 
+// fixed light footprint: opaque core (50px) + glow tail to 100px —
+// windows sit right at the glow's edge
+const LIGHT_W = 100;
+
 // One fragment shader paints a macOS-style edge light: an opaque white core
 // hugging the work-area edge plus a cool-white halo tailing into the work
 // area (and a short outward ramp toward the monitor edge). `s` is the
@@ -69,6 +73,7 @@ uniform float u_inner_radius;
 uniform float u_red;
 uniform float u_green;
 uniform float u_blue;
+uniform float u_temperature;
 uniform float u_brightness;
 uniform float u_band;
 uniform float u_mouse_x;
@@ -109,9 +114,15 @@ void main() {
     // so the glow never paints over window content
     alpha *= 1.0 - smoothstep(0.0, 4.0, -inner);
 
-    // halo tint: cool blue like the reference light, keeping the hue
-    vec3 coreColor = vec3(u_red, u_green, u_blue);
-    vec3 haloColor = coreColor * vec3(0.55, 0.82, 1.0);
+    // Warm blackbody colors look too yellow as an opaque UI edge. Desaturate
+    // only the warm end; 6500K keeps its existing near-white core and blue halo.
+    vec3 rawCore = vec3(u_red, u_green, u_blue);
+    float warm = 1.0 - smoothstep(2700.0, 4500.0, u_temperature);
+    vec3 coreColor = mix(rawCore, vec3(1.0), 0.35 * warm);
+    float cool = smoothstep(2700.0, 6500.0, u_temperature);
+    vec3 warmHalo = vec3(1.0, 0.78, 0.63);
+    vec3 coolHalo = rawCore * vec3(0.55, 0.82, 1.0);
+    vec3 haloColor = mix(warmHalo, coolHalo, cool);
     vec3 color = coreA >= haloA ? coreColor : haloColor;
     // pointer avoidance: fade the ring out inside a circle around the
     // cursor so it never covers the pointer; smoothstep ramps alpha from
@@ -178,7 +189,7 @@ export default class RingLightExtension extends Extension {
         this._settings = this.getSettings();
         this._settingsChangedId = this._settings.connect('changed', () => {
             if (this._active)
-                this._build();
+                this._applySettings();
         });
         this._borders = [];
         this._rings = []; // visible ring widgets only (not strut strips)
@@ -439,21 +450,11 @@ export default class RingLightExtension extends Extension {
         if (typeof Main.layoutManager._updateRegions === 'function')
             Main.layoutManager._updateRegions();
 
-        // fixed light footprint: opaque core (50px) + glow tail to 100px —
-        // windows sit right at the glow's edge
-        const LIGHT_W = 100;
-        const RADIUS = this._settings.get_int('ring-radius');
-        const [CR, CG, CB] = temperatureToRGB(this._settings.get_int('ring-color-temperature'));
-        const BRIGHTNESS = this._settings.get_int('brightness') / 100;
-
         // pointer-avoidance state: cache the scaled radius/fade (the motion
         // handler only refreshes x/y) and seed the hole at the current
         // pointer, so it is correct the moment the ring appears
         const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
         this._scale = scale;
-        const cursorOn = this._settings.get_boolean('cursor-transparency');
-        this._cursorUniforms.radius = cursorOn ? this._settings.get_int('cursor-radius') * scale : 0;
-        this._cursorUniforms.fade = cursorOn ? this._settings.get_int('cursor-fade') * scale : 0;
         if (!this._cursorPos) {
             try {
                 this._cursorPos = global.display.get_pointer_info().get_position();
@@ -509,13 +510,6 @@ export default class RingLightExtension extends Extension {
                 u_inner_top: (top + marginY) * scale,
                 u_inner_right: (left + marginX + innerW) * scale,
                 u_inner_bottom: (top + marginY + innerH) * scale,
-                u_outer_radius: RADIUS * scale,
-                u_inner_radius: Math.max(0, RADIUS - Math.max(marginX, marginY)) * scale,
-                u_red: CR / 255,
-                u_green: CG / 255,
-                u_blue: CB / 255,
-                u_brightness: BRIGHTNESS,
-                u_band: Math.min(marginX, marginY) * scale,
             });
             const ring = new St.Widget({
                 x, y, width, height,
@@ -567,6 +561,35 @@ export default class RingLightExtension extends Extension {
         // _updateRegions computes struts from allocations, so a live read
         // would snapshot a stale area and the poll would rebuild every tick)
         this._lastWorkAreas = baseline.join(';');
+        this._applySettings();
+    }
+
+    // Settings changes touch only shader uniforms (band width LIGHT_W is
+    // constant, so no strut changes): update in place instead of rebuilding,
+    // since a rebuild re-adds the strut strips and makes mutter resize every
+    // maximized/tiled window twice — a visible flicker.
+    _applySettings() {
+        const RADIUS = this._settings.get_int('ring-radius');
+        const TEMPERATURE = this._settings.get_int('ring-color-temperature');
+        const [CR, CG, CB] = temperatureToRGB(TEMPERATURE);
+        const BRIGHTNESS = this._settings.get_int('brightness') / 100;
+        const cursorOn = this._settings.get_boolean('cursor-transparency');
+        this._cursorUniforms.radius = cursorOn ? this._settings.get_int('cursor-radius') * this._scale : 0;
+        this._cursorUniforms.fade = cursorOn ? this._settings.get_int('cursor-fade') * this._scale : 0;
+
+        for (const {widget, effect} of this._rings) {
+            Object.assign(effect._uniforms, {
+                u_outer_radius: RADIUS * this._scale,
+                u_inner_radius: Math.max(0, RADIUS - LIGHT_W) * this._scale,
+                u_red: CR / 255,
+                u_green: CG / 255,
+                u_blue: CB / 255,
+                u_temperature: TEMPERATURE,
+                u_brightness: BRIGHTNESS,
+                u_band: LIGHT_W * this._scale,
+            });
+            widget.queue_redraw();
+        }
         this._updateCursorUniforms();
     }
 

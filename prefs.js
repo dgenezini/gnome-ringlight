@@ -55,6 +55,8 @@ export default class RingLightPreferences extends ExtensionPreferences {
                 step_increment: 100,
             }),
             digits: 0, // draw_value label shows the Kelvin value
+            draw_value: true,
+            value_pos: Gtk.PositionType.BOTTOM,
             hexpand: true,
         });
         settings.bind('ring-color-temperature', tempScale.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
