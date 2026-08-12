@@ -22,6 +22,7 @@ export default class RingLightPreferences extends ExtensionPreferences {
         const page = new Adw.PreferencesPage();
         const ringGroup = new Adw.PreferencesGroup({title: 'Ring'});
         const cursorGroup = new Adw.PreferencesGroup({title: 'Cursor'});
+        const integrationGroup = new Adw.PreferencesGroup({title: 'Integration'});
 
         // color temperature slider: track painted with the yellow→white ramp
         // so the slider itself previews the ring color. Title/subtitle are
@@ -91,6 +92,12 @@ export default class RingLightPreferences extends ExtensionPreferences {
         const brightnessRow = percentageRow(
             'Brightness', 'Light intensity, as a percentage', 'brightness');
 
+        const quickSettingsRow = new Adw.SwitchRow({
+            title: 'Show in Quick Settings',
+            subtitle: 'Show Ring Light control in GNOME Quick Settings',
+        });
+        settings.bind('show-quick-settings-toggle', quickSettingsRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+
         const radiusRow = new Adw.SpinRow({
             title: 'Corner radius',
             subtitle: 'Rounded ring corners; inner corner radius is this minus the ring width. 0 = sharp corners',
@@ -146,9 +153,11 @@ export default class RingLightPreferences extends ExtensionPreferences {
         cursorGroup.add(cursorEnabledRow);
         cursorGroup.add(cursorRadiusRow);
         cursorGroup.add(cursorFadeRow);
+        integrationGroup.add(quickSettingsRow);
 
         page.add(ringGroup);
         page.add(cursorGroup);
+        page.add(integrationGroup);
         window.add(page);
     }
 }

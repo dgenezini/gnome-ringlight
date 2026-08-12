@@ -177,6 +177,9 @@ class RingShaderEffect extends Clutter.ShaderEffect {
 const V4L2_POLL_MS = 1000;
 const V4L2_STREAK_MIN = 2; // consecutive polls before trusting an open
 
+// ring visual fade duration; struts appear/disappear instantly
+const FADE_MS = 250;
+
 // ring-mode setting values → labels shown in the quick settings toggle
 const RING_MODES = {
     auto: 'Automatic',
@@ -198,12 +201,15 @@ export default class RingLightExtension extends Extension {
         this._scale = 1;
         this._active = false;
         this._cameraInUse = false;
+        this._transitionToken = 0; // guards stale fade callbacks
 
         this._modeChangedId = this._settings.connect('changed::ring-mode', () => {
             this._refresh();
             this._updateToggle();
         });
-        this._createToggle();
+        this._quickSettingsChangedId = this._settings.connect(
+            'changed::show-quick-settings-toggle', () => this._updateQuickSettings());
+        this._updateQuickSettings();
 
         // same object GNOME Shell's camera indicator binds to
         // (js/ui/status/camera.js): mutter's PipeWire camera monitor
@@ -249,9 +255,6 @@ export default class RingLightExtension extends Extension {
             }
             return GLib.SOURCE_CONTINUE;
         });
-        // TEMP DEBUG
-        this._dbgLast = 0;
-
         // Browsers bypass PipeWire for video: Firefox/Chrome open /dev/videoX
         // directly, which CameraMonitor never sees. Poll for open camera fds.
         this._v4l2Streak = 0;
@@ -277,15 +280,26 @@ export default class RingLightExtension extends Extension {
         }
         this._settings.disconnect(this._settingsChangedId);
         this._settings.disconnect(this._modeChangedId);
+        this._settings.disconnect(this._quickSettingsChangedId);
         if (this._cameraMonitor) {
             this._cameraMonitor.disconnect(this._cameraChangedId);
             this._cameraMonitor = null;
         }
-        this._toggle.destroy();
-        this._toggle = null;
-        this._indicator.destroy();
-        this._indicator = null;
-        this._setActive(false); // removes chrome + disconnects monitors-changed
+        this._destroyToggle();
+        // disable must be fully synchronous: cancel any in-flight fade and
+        // remove all chrome now, so no callback outlives the extension
+        this._transitionToken++;
+        for (const {widget} of this._rings)
+            widget.remove_all_transitions();
+        for (const a of this._borders)
+            Main.layoutManager.removeChrome(a);
+        this._borders = [];
+        this._rings = [];
+        if (this._monitorsChangedId) {
+            Main.layoutManager.disconnect(this._monitorsChangedId);
+            this._monitorsChangedId = 0;
+        }
+        this._active = false;
     }
 
     // single source of truth for ring visibility: mode gates the camera
@@ -324,7 +338,28 @@ export default class RingLightExtension extends Extension {
         this._updateToggle();
     }
 
+    _destroyToggle() {
+        if (this._toggle) {
+            this._toggle.destroy();
+            this._toggle = null;
+        }
+        if (this._indicator) {
+            this._indicator.destroy();
+            this._indicator = null;
+        }
+    }
+
+    _updateQuickSettings() {
+        const visible = this._settings.get_boolean('show-quick-settings-toggle');
+        if (visible && !this._toggle)
+            this._createToggle();
+        else if (!visible && this._toggle)
+            this._destroyToggle();
+    }
+
     _updateToggle() {
+        if (!this._toggle)
+            return;
         const mode = this._settings.get_string('ring-mode');
         // auto/always can light the ring, so they show the enabled color;
         // off is the only disabled-looking state
@@ -338,18 +373,50 @@ export default class RingLightExtension extends Extension {
         if (active === this._active)
             return;
         this._active = active;
+        this._transitionToken++; // stale fade callbacks from a prior state must not act
         if (active) {
+            // struts reserve the work area immediately; only visuals fade in
             this._build();
             this._monitorsChangedId = Main.layoutManager.connect(
                 'monitors-changed', () => {
                     if (this._active)
                         this._build();
                 });
+            for (const {widget} of this._rings) {
+                widget.opacity = 0;
+                widget.ease({
+                    opacity: 255,
+                    duration: FADE_MS,
+                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                });
+            }
         } else {
-            Main.layoutManager.disconnect(this._monitorsChangedId);
-            for (const a of this._borders)
-                Main.layoutManager.removeChrome(a);
-            this._borders = [];
+            if (this._monitorsChangedId) {
+                Main.layoutManager.disconnect(this._monitorsChangedId);
+                this._monitorsChangedId = 0;
+            }
+            // struts stay until fade-out completes: the ring must remain
+            // paired with the work area it reserves until it disappears
+            const token = this._transitionToken;
+            const cleanup = () => {
+                if (this._transitionToken !== token)
+                    return; // state changed again; newer chrome is authoritative
+                for (const a of this._borders)
+                    Main.layoutManager.removeChrome(a);
+                this._borders = [];
+                this._rings = [];
+            };
+            if (this._rings.length === 0) {
+                cleanup();
+            } else {
+                for (const {widget} of this._rings)
+                    widget.ease({
+                        opacity: 0,
+                        duration: FADE_MS,
+                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                        onComplete: cleanup,
+                    });
+            }
         }
     }
 
@@ -435,8 +502,6 @@ export default class RingLightExtension extends Extension {
     }
 
     _build() {
-        // TEMP DEBUG
-        console.log('RL build', new Error().stack.split('\n').slice(1, 3).join(' | '));
         for (const a of this._borders)
             Main.layoutManager.removeChrome(a);
         this._borders = [];
@@ -599,13 +664,6 @@ export default class RingLightExtension extends Extension {
         if (!this._cursorPos || this._rings.length === 0)
             return;
         const [cx, cy] = this._cursorPos;
-        // TEMP DEBUG
-        const now = Date.now();
-        if (now - this._dbgLast > 1000) {
-            this._dbgLast = now;
-            console.log('RL ucu', cx.toFixed(0), cy.toFixed(0), 'active', this._active,
-                'r', this._cursorUniforms.radius, 'rings', this._rings.length);
-        }
         for (const {widget, effect} of this._rings) {
             this._setFloatUniform(effect, 'u_mouse_x', (cx - widget.x) * this._scale);
             this._setFloatUniform(effect, 'u_mouse_y', (cy - widget.y) * this._scale);

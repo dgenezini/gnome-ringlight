@@ -23,6 +23,11 @@
       <summary>Ring mode</summary>
       <description>How the ring is activated: 'auto' follows the camera, 'always' keeps the ring on, 'off' hides it.</description>
     </key>
+    <key name="show-quick-settings-toggle" type="b">
+      <default>true</default>
+      <summary>Show Quick Settings toggle</summary>
+      <description>Whether to show Ring Light control in GNOME Quick Settings.</description>
+    </key>
     <key name="cursor-transparency" type="b">
       <default>false</default>
       <summary>Cursor transparency</summary>
