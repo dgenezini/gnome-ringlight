@@ -28,6 +28,11 @@
       <summary>Show Quick Settings toggle</summary>
       <description>Whether to show Ring Light control in GNOME Quick Settings.</description>
     </key>
+    <key name="excluded-monitors" type="as">
+      <default>[]</default>
+      <summary>Excluded monitor connectors</summary>
+      <description>Connector names of monitors that do not receive a ring.</description>
+    </key>
     <key name="cursor-transparency" type="b">
       <default>false</default>
       <summary>Cursor transparency</summary>

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
 import Adw from 'gi://Adw';
+import Gdk from 'gi://Gdk';
 import Gio from 'gi://Gio';
 import Gtk from 'gi://Gtk';
 
@@ -22,6 +23,7 @@ export default class RingLightPreferences extends ExtensionPreferences {
         const page = new Adw.PreferencesPage();
         const ringGroup = new Adw.PreferencesGroup({title: 'Ring'});
         const cursorGroup = new Adw.PreferencesGroup({title: 'Cursor'});
+        const monitorGroup = new Adw.PreferencesGroup({title: 'Monitors'});
         const integrationGroup = new Adw.PreferencesGroup({title: 'Integration'});
 
         // color temperature slider: track painted with the yellow→white ramp
@@ -98,6 +100,28 @@ export default class RingLightPreferences extends ExtensionPreferences {
         });
         settings.bind('show-quick-settings-toggle', quickSettingsRow, 'active', Gio.SettingsBindFlags.DEFAULT);
 
+        const monitors = Gdk.Display.get_default()?.get_monitors();
+        for (let i = 0; monitors && i < monitors.get_n_items(); i++) {
+            const connector = monitors.get_item(i).get_connector();
+            if (!connector) {
+                console.warn('Ring Light: no connector identity for monitor; cannot configure exclusion');
+                continue;
+            }
+            const row = new Adw.SwitchRow({
+                title: connector,
+                subtitle: 'Show ring on this monitor',
+                active: !settings.get_strv('excluded-monitors').includes(connector),
+            });
+            row.connect('notify::active', () => {
+                const excluded = settings.get_strv('excluded-monitors')
+                    .filter(name => name !== connector);
+                if (!row.active)
+                    excluded.push(connector);
+                settings.set_strv('excluded-monitors', excluded);
+            });
+            monitorGroup.add(row);
+        }
+
         const radiusRow = new Adw.SpinRow({
             title: 'Corner radius',
             subtitle: 'Rounded ring corners; inner corner radius is this minus the ring width. 0 = sharp corners',
@@ -157,6 +181,7 @@ export default class RingLightPreferences extends ExtensionPreferences {
 
         page.add(ringGroup);
         page.add(cursorGroup);
+        page.add(monitorGroup);
         page.add(integrationGroup);
         window.add(page);
     }
