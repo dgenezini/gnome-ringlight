@@ -1,112 +1,133 @@
 # GNOME Ring Light
 
-GNOME Shell extension that draws a white border around every monitor. The ring
-reserves space like the top bar does (chrome struts), so maximized, tiled, and
-newly placed windows shrink to stay inside it. Fullscreen windows ignore
-struts by design — the ring stays visible during video calls.
+GNOME Shell extension that adds a soft light around every monitor. It reserves
+the light's space as a GNOME Shell chrome strut, so maximized, tiled, and newly
+placed windows stay inside the light.
 
-The ring is only active while a camera is in use. It watches the same
-PipeWire camera monitor as GNOME Shell's camera indicator, so it appears when
-you join a call and disappears when you leave. If the camera monitor is
-unavailable, the ring stays on permanently with a warning in the shell log.
+![GNOME Ring Light](gnome-ring-light.png)
 
-Supports GNOME Shell 45–50.
+Useful for video calls, streaming, recording, or any setup that needs simple
+monitor-edge lighting without a physical lamp.
 
-## Requirements
+## Features
 
-- GNOME Shell 45–50
-- `glib-compile-schemas` (part of GLib) if installing from source
+- Multi-monitor support; ring rebuilds when monitors are added or removed
+- Automatic activation when a camera is in use
+  - Uses GNOME Shell's PipeWire camera monitor
+  - Also detects browsers that open `/dev/video*` directly
+- Quick Settings control with three modes: **Automatic**, **Always On**, and
+  **Off**
+- Click-through overlay; it does not intercept application input
+- Maximized and tiled windows respect the reserved light area
+- Fullscreen windows ignore struts by design, so the ring remains visible during
+  calls and playback
+- Adjustable brightness, color temperature, and corner radius
+- Optional cursor transparency: fade ring around pointer while pointer rests on
+  ring
+- GNOME Shell 45–50 support
 
 ## Install
 
-### Zip release (recommended)
+### Release package
 
-Download `ringlight@danielgenezini.shell-extension.zip` from the
-[latest release](https://github.com/dgenezini/gnome-ringlight/releases) and
-install it:
+Download the latest
+[`ringlight@danielgenezini.shell-extension.zip`](https://github.com/dgenezini/gnome-ringlight/releases)
+from Releases, then run:
 
 ```sh
 gnome-extensions install ringlight@danielgenezini.shell-extension.zip
 ```
 
-On X11, restart the shell with `alt+F2` → `r`; on Wayland, re-login. Then
-enable:
+Restart GNOME Shell after installation. On X11, press `Alt+F2`, enter `r`, and
+press Enter. On Wayland, log out and back in. Enable extension:
 
 ```sh
 gnome-extensions enable ringlight@danielgenezini
 ```
 
-### From source
+### Source
 
-Clone the repo and symlink it into the extensions directory:
-
-```sh
-git clone https://github.com/dgenezini/gnome-ringlight ~/.local/share/gnome-shell/extensions/ringlight@danielgenezini
-```
-
-If you cloned elsewhere, symlink instead:
+Clone directly into GNOME's extension directory:
 
 ```sh
-ln -s /path/to/gnome-ringlight ~/.local/share/gnome-shell/extensions/ringlight@danielgenezini
+git clone https://github.com/dgenezini/gnome-ringlight \
+  ~/.local/share/gnome-shell/extensions/ringlight@danielgenezini
 ```
 
-On X11, log out and back in (or restart the shell with `alt+F2` → `r`). On
-Wayland, re-login or reboot. Then enable:
+Or clone elsewhere and symlink:
 
 ```sh
-gnome-extensions enable ringlight@danielgenezini
+ln -s /path/to/gnome-ringlight \
+  ~/.local/share/gnome-shell/extensions/ringlight@danielgenezini
 ```
 
-### From source
+Restart GNOME Shell, then enable it with `gnome-extensions enable` as above.
 
-The compiled schema binary is committed, but if you edit the schema, recompile
-it:
+## Usage
+
+Default mode is **Automatic**. Start or join a call using a camera; ring
+appears. Stop camera use; ring fades out.
+
+Open GNOME Quick Settings and select **Ring Light** to choose:
+
+- **Automatic** — follow camera activity
+- **Always On** — show ring regardless of camera activity
+- **Off** — hide ring
+
+Open extension preferences from **GNOME Settings → Extensions → Ring Light** to
+configure:
+
+- Color temperature: 2700 K warm yellow to 6500 K daylight white
+- Brightness: 0–100%
+- Corner radius
+- Cursor transparency, cursor hole radius, and fade width
+
+Settings can also be changed with `gsettings`:
+
+```sh
+gsettings set org.gnome.shell.extensions.ringlight ring-mode always
+gsettings set org.gnome.shell.extensions.ringlight brightness 75
+gsettings set org.gnome.shell.extensions.ringlight ring-color-temperature 4500
+```
+
+## Behavior and limitations
+
+- Overlay is non-reactive, so clicks pass through to windows underneath.
+- If GNOME's camera monitor cannot be created, Automatic mode keeps ring on and logs warning.
+- Fullscreen applications do not honor work-area struts; ring remains visible.
+
+## Development
+
+Repository is intended to be symlinked into extension directory. No build step.
+
+Check JavaScript syntax:
+
+```sh
+node --check extension.js prefs.js
+```
+
+After code changes, perform full GNOME Shell restart. Disabling and enabling
+extension alone may reuse cached GJS modules.
+
+After schema changes, recompile committed schema binary:
 
 ```sh
 glib-compile-schemas schemas/
 ```
 
-Commit the new binary — `schemas/gschemas.compiled` must stay up to date or
-settings changes won't apply.
-
-## Usage
-
-Join or start a call using your camera — the ring appears. Hang up — it
-disappears. Configure the border width (in logical pixels, default 150) in
-GNOME Settings → Extensions, or directly:
-
-```sh
-gsettings set org.gnome.shell.extensions.ringlight border-width 200
-```
-
-## Development
-
-The repo is symlinked into the extensions directory, so edits are live — no
-install step.
-
-### Run
-
-Reload after any change:
-
-```sh
-gnome-extensions disable ringlight@danielgenezini && gnome-extensions enable ringlight@danielgenezini
-```
-
-Schema or prefs changes may need a full shell restart (`alt+F2` → `r` on X11,
-or Wayland session re-login).
-
-### Test
-
-No test suite exists. Manual checklist for every change:
-
-- Syntax check: `node --check extension.js prefs.js`
-- Camera on → ring appears
-- Camera off → ring disappears
-- Monitor added/removed while ring active → ring rebuilds correctly
-- Extension disabled while ring active → everything cleans up
-
-Watch errors in the shell log:
+Watch GNOME Shell errors:
 
 ```sh
 journalctl -f /usr/bin/gnome-shell
 ```
+
+Manual smoke test:
+
+1. Camera on: ring appears.
+2. Camera off: ring disappears.
+3. Add/remove monitor while active: ring rebuilds.
+4. Disable extension while active: work area restores.
+
+## License
+
+[GPL-2.0-or-later](LICENSE)
