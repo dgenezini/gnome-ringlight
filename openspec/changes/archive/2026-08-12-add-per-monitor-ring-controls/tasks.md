@@ -12,4 +12,4 @@
 
 - [x] 3.1 Add enabled monitor rows to preferences, backed by excluded connector names.
 - [x] 3.2 Run `node --check extension.js prefs.js`.
-- [ ] 3.3 Manually test default all-monitor behavior, excluding/re-enabling one monitor while active, monitor reconnect, camera on/off, and disable while active after full Shell restart.
+- [x] 3.3 Manually test default all-monitor behavior, excluding/re-enabling one monitor while active, monitor reconnect, camera on/off, and disable while active after full Shell restart.

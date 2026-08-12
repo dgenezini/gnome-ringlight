@@ -85,3 +85,25 @@ The ring SHALL hug the monitor's work area rather than the monitor rect: the ban
 #### Scenario: Bars change while ring active
 - **WHEN** a dock is added, removed, or resized while the ring is active
 - **THEN** the ring rebuilds and hugs the updated work area
+
+### Requirement: Continuous default call light
+The extension SHALL default `cursor-transparency` to false so active ring remains continuous while pointer rests on a ring edge. Cursor transparency and its radius/fade settings SHALL remain available in preferences.
+
+#### Scenario: Default pointer on ring
+- **WHEN** pointer rests on an active ring using default settings
+- **THEN** ring core and halo remain continuous at pointer location
+
+#### Scenario: Cursor transparency enabled
+- **WHEN** user enables `cursor-transparency` while ring is active and pointer is on ring band
+- **THEN** ring fades around pointer according to configured cursor radius and fade
+
+### Requirement: Appearance controls available in preferences
+The preferences window SHALL expose Brightness, Softness, and Glow controls in addition to existing color temperature and width controls. Each control SHALL show and persist its current percentage value from 0 through 100 and SHALL update the active ring immediately.
+
+#### Scenario: Appearance controls shown
+- **WHEN** the user opens Ring Light preferences
+- **THEN** Brightness, Softness, and Glow controls are visible with their stored percentage values
+
+#### Scenario: Appearance control persisted
+- **WHEN** the user changes Brightness, Softness, or Glow and closes preferences
+- **THEN** reopening preferences shows the saved value and the next ring activation uses it

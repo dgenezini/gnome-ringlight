@@ -1,39 +1,67 @@
-# edge-glow-rendering
-
-## Purpose
-
-Render the ring with a soft natural glow instead of a solid flat band. (TBD: expand)
-
 ## Requirements
 
 ### Requirement: Ring rendered with small edge gradient
-The extension SHALL paint the visible ring with Cairo on an `St.DrawingArea` instead of a solid CSS border. The ring SHALL be fully opaque with a small soft gradient at the band edges: flat colored center with ~3px fade at the inner and outer edges, produced by a `Shell.BlurEffect` with a fixed 2px radius. Anti-aliasing SHALL be enabled so rounded corners render smoothly at any border width.
+The extension SHALL render each visible ring with one `Clutter.ShaderEffect` attached to one non-strut `St.Widget`; it SHALL NOT use Cairo painting or `Shell.BlurEffect` for ring appearance. The shader SHALL calculate distance to the inner and outer rounded ring edges and use `smoothstep` falloff to produce a long alpha gradient: opaque core, followed by approximately 80%, 40%, 10%, and 0% opacity. Rounded corners SHALL use distance-field geometry so their gradient is radial and continuous with adjacent edges.
 
 #### Scenario: Ring active
 - **WHEN** the ring is active
-- **THEN** the ring is painted with anti-aliased edges, has a flat opaque colored center, and fades only in the last few pixels at the inner and outer band edges
+- **THEN** each monitor has one shader-rendered rounded ring with a continuous multi-stop falloff from its bright core to transparency and no seams at corners
 
 #### Scenario: Ring follows configured width
 - **WHEN** the ring is active
-- **THEN** the opaque band thickness equals the configured width (`border-width`, or the resolution-derived margin), and the glow does not extend beyond the blur radius
+- **THEN** the shader uses configured per-axis width (`border-width`, or resolution-derived margins) for its inner and outer boundaries, and the core remains centered within each border band
+
+#### Scenario: Rounded corner transition
+- **WHEN** the ring has a non-zero corner radius
+- **THEN** alpha contours around each corner follow rounded radial curves rather than intersecting rectangular side gradients
 
 ### Requirement: Gradient derives from existing color
-The gradient SHALL be computed from the existing `border-color-temperature` color — no new color settings. The edge fade SHALL be a fixed default with no user-facing controls.
+The shader SHALL derive its RGB color from the existing `border-color-temperature` setting with no additional color setting. It SHALL multiply the final alpha by the configured `brightness` setting. `brightness` SHALL range from 0 to 100 percent and default to 100 percent; at 100 percent, the core SHALL be fully opaque before glow falloff.
 
 #### Scenario: Temperature changed
 - **WHEN** `border-color-temperature` changes while the ring is active
-- **THEN** the ring rebuilds with the new hue applied across the whole band, with the same edge fade
+- **THEN** the ring rebuilds with the new hue applied across its core and glow while retaining current brightness, softness, and glow behavior
 
-### Requirement: Struts and click-through unchanged
-The ring's new rendering SHALL NOT change the extension's strut behavior: the transparent strips continue to reserve the work area, the ring actor remains non-strut and `reactive: false`, and pointer events continue to pass through to windows.
-
-#### Scenario: Ring active over interactive windows
-- **WHEN** the ring is active and the pointer moves over it
-- **THEN** clicks and hover pass through to the windows below, and the work area is shrunk exactly as before
+#### Scenario: Brightness changed
+- **WHEN** the user changes brightness while the ring is active
+- **THEN** the ring rebuilds with final alpha scaled to the selected percentage without changing ring geometry or struts
 
 ### Requirement: HiDPI monitors render sharply
-The ring SHALL scale its Cairo drawing by the shell's scale factor so the band and edges stay sharp on scaled (HiDPI) monitors.
+The shader SHALL receive dimensions and distances in physical pixels derived from GNOME Shell's scale factor, while user-configured geometry remains in logical pixels. The ring and its multi-stop gradients SHALL render without clipping, jagged corners, or scale-dependent width changes on scaled monitors.
 
 #### Scenario: Ring on a scaled monitor
 - **WHEN** the ring is active on a monitor whose scale factor is greater than 1
-- **THEN** the ring's band and edge fade render at the monitor's physical resolution without blurring or jagged steps
+- **THEN** core width, 20/50/100 logical-pixel glow extents, and rounded gradient contours are rendered at matching physical-pixel scale
+
+### Requirement: Ring has three continuous glow zones
+The shader SHALL produce bright core, medium glow, and outer glow zones in one rendering pass. At default settings their logical-pixel extents SHALL be 20px, 50px, and 100px respectively, with successively lower opacity. No separate painted actor or blur effect SHALL be used for these zones.
+
+#### Scenario: Default glow appearance
+- **WHEN** the ring is active with default softness and glow settings
+- **THEN** the visible ring has a 20px bright core followed by medium and outer diffusion extending to approximately 50px and 100px without discontinuities
+
+#### Scenario: No glow seams
+- **WHEN** a glow zone crosses from an edge into a rounded corner
+- **THEN** its opacity transition remains continuous with no overlap seam or abrupt rectangular corner
+
+### Requirement: Softness and glow adjust gradient profile
+The extension SHALL provide `softness` and `glow` settings, each ranging from 0 to 100 percent. `softness` SHALL control gradient transition breadth; `glow` SHALL control medium and outer glow spread and opacity. Both settings SHALL apply live while the ring is active and SHALL NOT alter strut geometry.
+
+#### Scenario: Softness changed
+- **WHEN** the user increases softness while the ring is active
+- **THEN** the shader widens the alpha falloff around the core while preserving its configured border geometry
+
+#### Scenario: Glow changed
+- **WHEN** the user decreases glow while the ring is active
+- **THEN** medium and outer glow become less prominent and shorter while core brightness and work-area reservation remain unchanged
+
+### Requirement: Halo does not reserve extra workspace
+The visible halo SHALL be rendered by non-strut click-through chrome. Transparent strut actors SHALL reserve configured ring width and SHALL NOT expand to reserve additional halo-only area.
+
+#### Scenario: Halo visible around active ring
+- **WHEN** ring activates with default glow profile
+- **THEN** maximized and tiled windows are constrained by configured ring width, not by extra halo-only pixels
+
+#### Scenario: Ring active over interactive windows
+- **WHEN** pointer moves or clicks over visible core or halo
+- **THEN** pointer events pass through to windows below
