@@ -13,6 +13,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set version from tag
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          sed -i -E 's/"version-name": "[^"]*"/"version-name": "'"$VER"'"/' metadata.json
+          sed -i -E 's/"version": [0-9]+/"version": '"$(echo "$VER" | tr -d '.')"'/' metadata.json
+
       - name: Pack extension
         run: |
           mkdir -p dist
