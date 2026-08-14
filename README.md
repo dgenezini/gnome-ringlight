@@ -26,7 +26,7 @@ monitor-edge lighting without a physical lamp.
   ring
 - GNOME Shell 45–50 support
 
-Demo: [demo.webm](demo.webm)
+Demo: [demo.webm](./raw/branch/main/demo.webm)
 
 ## Install
 
