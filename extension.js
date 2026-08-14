@@ -262,6 +262,7 @@ export default class RingLightExtension extends Extension {
         // Browsers bypass PipeWire for video: Firefox/Chrome open /dev/videoX
         // directly, which CameraMonitor never sees. Poll for open camera fds.
         this._v4l2Streak = 0;
+        this._v4l2FdCounts = {}; // pid -> fd count, so the crawl stats only changed fds
         this._lastWorkAreas = null;
         this._v4l2PollId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, V4L2_POLL_MS, () => {
             this._poll();
@@ -484,11 +485,19 @@ export default class RingLightExtension extends Extension {
         if (nodes.length === 0)
             return false;
 
+        // Only stat fds that are new since the last poll: a video open shows
+        // up as the process gaining an fd, so unchanged processes are skipped
+        // entirely (one readdir each) instead of paying a stat per fd. The
+        // 15k+ GIO stat calls per second this previously did on a busy system
+        // blocked the shell main loop — the CPU/freeze report.
+        const counts = this._v4l2FdCounts;
+        const seen = new Set();
         const procs = new GLib.Dir('/proc', 0);
         let pid;
         while ((pid = procs.read_name()) !== null) {
             if (!pid.match(/^\d+$/))
                 continue;
+            seen.add(pid);
             let fds;
             try {
                 fds = new GLib.Dir(`/proc/${pid}/fd`, 0);
@@ -496,11 +505,27 @@ export default class RingLightExtension extends Extension {
                 continue; // pid exited between reads
             }
             let fd;
+            let count = 0;
+            const names = [];
             while ((fd = fds.read_name()) !== null) {
-                const key = this._statKey(`/proc/${pid}/fd/${fd}`);
-                if (key && nodes.includes(key))
-                    return true;
+                count++;
+                names.push(fd);
             }
+            if (counts[pid] === count)
+                continue; // no fd change since last poll, nothing to check
+            for (const fdName of names) {
+                const key = this._statKey(`/proc/${pid}/fd/${fdName}`);
+                if (key && nodes.includes(key)) {
+                    counts[pid] = count;
+                    return true;
+                }
+            }
+            counts[pid] = count;
+        }
+        // prune pids that have exited
+        for (const pid of Object.keys(counts)) {
+            if (!seen.has(pid))
+                delete counts[pid];
         }
         return false;
     }
