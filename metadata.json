@@ -1,6 +1,6 @@
 {
   "name": "Ring Light",
-  "description": "White 150px border around every monitor; maximized windows shrink to stay inside it.",
+  "description": "White ring around every monitor; maximized windows shrink to stay inside it.",
   "uuid": "ringlight@danielgenezini",
   "url": "https://github.com/dgenezini/gnome-ringlight",
   "settings-schema": "org.gnome.shell.extensions.ringlight",
