@@ -11,7 +11,6 @@
 // during video calls.
 import Clutter from 'gi://Clutter';
 import Cogl from 'gi://Cogl';
-import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Shell from 'gi://Shell';
@@ -174,7 +173,7 @@ class RingShaderEffect extends Clutter.ShaderEffect {
     }
 });
 
-const V4L2_POLL_MS = 1000;
+const V4L2_POLL_MS = 2000;
 const V4L2_STREAK_MIN = 2; // consecutive polls before trusting an open
 
 // ring visual fade duration; struts appear/disappear instantly
@@ -456,28 +455,18 @@ export default class RingLightExtension extends Extension {
         return true;
     }
 
-    // stat() on /proc/PID/fd/N follows the magic link to the open file, so
-    // compare its device:inode against the /dev/video* nodes
-    _statKey(path) {
-        try {
-            const info = Gio.File.new_for_path(path)
-                .query_info('unix::device,unix::inode', Gio.FileQueryInfoFlags.NONE, null);
-            return info.get_attribute_uint32('unix::device') + ':' +
-                info.get_attribute_uint64('unix::inode');
-        } catch (e) {
-            return null; // fd vanished / no permission
-        }
-    }
-
+    // An open camera fd shows up as /proc/PID/fd/N → /dev/videoX. Plain
+    // readlink per fd: one syscall each, no GIO/GFile allocation (a stat
+    // on every fd of every process once a second was the CPU hog).
     _v4l2InUse() {
         const dev = new GLib.Dir('/dev', 0);
-        const nodes = [];
+        const nodes = new Set();
         let name;
         while ((name = dev.read_name()) !== null) {
             if (name.startsWith('video'))
-                nodes.push(this._statKey('/dev/' + name));
+                nodes.add('/dev/' + name);
         }
-        if (nodes.length === 0)
+        if (nodes.size === 0)
             return false;
 
         const procs = new GLib.Dir('/proc', 0);
@@ -493,9 +482,12 @@ export default class RingLightExtension extends Extension {
             }
             let fd;
             while ((fd = fds.read_name()) !== null) {
-                const key = this._statKey(`/proc/${pid}/fd/${fd}`);
-                if (key && nodes.includes(key))
-                    return true;
+                try {
+                    if (nodes.has(GLib.file_read_link(`/proc/${pid}/fd/${fd}`)))
+                        return true;
+                } catch (e) {
+                    // fd vanished between readdir and readlink
+                }
             }
         }
         return false;
