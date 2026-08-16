@@ -18,9 +18,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Install GNOME Shell and glib tools
-        run: sudo apt-get update && sudo apt-get install -y gnome-shell dbus libglib2.0-bin
+      - name: Install GNOME Shell, glib tools and prefs-window deps
+        run: sudo apt-get update && sudo apt-get install -y gnome-shell dbus libglib2.0-bin gjs xvfb gir1.2-adw-1
       - name: Unit suite
         run: node --test tests/extension.test.mjs
       - name: Headless shell integration suite
         run: node tests/headless/run.mjs
+      - name: Prefs window integration suite
+        run: node tests/headless/prefs.mjs

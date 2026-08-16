@@ -22,9 +22,14 @@ const SCHEMA_XML = 'schemas/org.gnome.shell.extensions.ringlight.gschema.xml';
 const SCHEMA_BINARY = 'schemas/gschemas.compiled';
 
 test('syntax: node --check parses extension.js and prefs.js', () => {
-    // --check takes one file; GJS gi:// imports are never resolved at parse time
+    // GJS gi:// imports are never resolved at parse time. --check on a bare
+    // .js file is a no-op when node detects ESM (import/export present), so
+    // force ESM via --input-type=module over stdin — that path really parses.
     for (const f of ['extension.js', 'prefs.js'])
-        execFileSync(process.execPath, ['--check', f], {cwd: ROOT});
+        execFileSync(process.execPath, ['--input-type=module', '--check', '-'], {
+            input: read(f),
+            cwd: ROOT,
+        });
 });
 
 test('metadata.json is sane', () => {

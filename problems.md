@@ -67,6 +67,7 @@ Bugs reported and fixed across the project's OpenCode session history (55 sessio
 | Left/right margins missing vs other rows | Rows inset content `margin-left/right: 6px` | Match SpinRow inset |
 | Per-monitor switches would crash on every GNOME 45–50 | Stash "fix" swapped `get_monitors()` GListModel for `Gdk.Display.get_n_monitors()`/`get_monitor(i)` — those were removed in GTK 4.0 and never re-added; GListModel is the only monitor API | Kept `get_monitors()` + `get_n_items()`/`get_item()` (verified against GTK 4.12 header and GNOME 50 typelib) |
 | `ring-radius` had no `<range>` in gschema while prefs SpinRow allowed 200 | Schema and prefs bounds duplicated by hand, no link between them | Added `<range min="0" max="200"/>`, recompiled binary; new test asserts prefs Adjustment bounds match schema ranges |
+| Sabotaged prefs.js (undefined call, broken `import` string) passed all CI | `node --check` on a `.js` file with a top-level static `import` is a silent no-op: `--experimental-detect-module` classifies it ESM, then `--check` skips parsing the body (verified on node 20 and 24; only CJS `.js` or `.mjs` actually parse); headless suite never loads prefs.js | Unit test forces real ESM parse: `node --input-type=module --check -` feeding the file over stdin |
 
 ## Misc
 

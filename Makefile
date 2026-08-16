@@ -2,7 +2,7 @@ SHELL := /bin/bash
 
 .PHONY: all check test test-headless schemas
 
-all: check test
+all: check test test-prefs
 
 # Syntax check
 check:
@@ -16,6 +16,10 @@ test:
 # Headless GNOME Shell integration suite
 test-headless:
 	node tests/headless/run.mjs
+
+# Prefs window integration suite (needs Xvfb, gjs, gir1.2-adw-1)
+test-prefs:
+	node tests/headless/prefs.mjs
 
 # Recompile schema binary (commit the result)
 schemas:
