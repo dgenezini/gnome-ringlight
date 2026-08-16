@@ -13,6 +13,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set version from tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          jq --arg v "$version" '."version-name" = $v' metadata.json > metadata.json.tmp
+          mv metadata.json.tmp metadata.json
+
       - name: Pack extension
         run: |
           mkdir -p dist
