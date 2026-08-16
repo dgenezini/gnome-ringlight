@@ -3,6 +3,7 @@
   <schema id="org.gnome.shell.extensions.ringlight" path="/org/gnome/shell/extensions/ringlight/">
     <key name="ring-radius" type="i">
       <default>120</default>
+      <range min="0" max="200"/>
       <summary>Corner radius</summary>
       <description>Radius in logical pixels of the ring's rounded corners; 0 for sharp corners. The inner corner radius is this minus the ring width.</description>
     </key>

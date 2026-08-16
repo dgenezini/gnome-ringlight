@@ -44,6 +44,12 @@ function temperatureToRGB(kelvin) {
     return [r, g, b].map(clamp);
 }
 
+// when the ring is visible, pure so the truth table stays testable:
+// off hides it always; always ignores the camera; auto follows the camera
+function ringVisible(mode, cameraInUse) {
+    return mode !== 'off' && (mode === 'always' || cameraInUse);
+}
+
 // fixed light footprint: opaque core (50px) + glow tail to 100px —
 // windows sit right at the glow's edge
 const LIGHT_W = 100;
@@ -316,7 +322,7 @@ export default class RingLightExtension extends Extension {
     // funnels through here.
     _refresh() {
         const mode = this._settings.get_string('ring-mode');
-        this._setActive(mode !== 'off' && (mode === 'always' || this._cameraInUse));
+        this._setActive(ringVisible(mode, this._cameraInUse));
     }
 
     // Quick Settings toggle (the popover with wifi/bluetooth/dnd), same
@@ -338,6 +344,11 @@ export default class RingLightExtension extends Extension {
             });
             this._modeItems[mode] = item;
         }
+        toggle.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        toggle.menu.addAction('Ring Sight Settings', () => {
+            toggle.menu.close();
+            this.openPreferences();
+        });
         toggle.connect('clicked', () => toggle.menu.open());
         this._toggle = toggle;
         const indicator = new QuickSettings.SystemIndicator();
