@@ -197,12 +197,19 @@ export default class RingLightExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
         this._settingsChangedId = this._settings.connect('changed', (_settings, key) => {
-            if (!this._active)
-                return;
-            if (key === 'excluded-monitors')
-                this._build();
-            else
-                this._applySettings();
+            if (key === 'ring-mode') {
+                // runs even while inactive: switching from Off to Always On
+                // must turn the ring on
+                this._refresh();
+                this._updateToggle();
+            } else if (key === 'show-quick-settings-toggle') {
+                this._updateQuickSettings();
+            } else if (this._active) {
+                if (key === 'excluded-monitors')
+                    this._build();
+                else
+                    this._applySettings();
+            }
         });
         this._borders = [];
         this._rings = []; // visible ring widgets only (not strut strips)
@@ -213,12 +220,6 @@ export default class RingLightExtension extends Extension {
         this._cameraInUse = false;
         this._transitionToken = 0; // guards stale fade callbacks
 
-        this._modeChangedId = this._settings.connect('changed::ring-mode', () => {
-            this._refresh();
-            this._updateToggle();
-        });
-        this._quickSettingsChangedId = this._settings.connect(
-            'changed::show-quick-settings-toggle', () => this._updateQuickSettings());
         this._updateQuickSettings();
 
         // same object GNOME Shell's camera indicator binds to
@@ -255,7 +256,7 @@ export default class RingLightExtension extends Extension {
         this._pointerPollId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
             if (this._active && this._cursorUniforms.radius > 0) {
                 try {
-                    const [px, py] = global.display.get_pointer_info().get_position();
+                    const [px, py] = global.get_pointer();
                     if (!this._cursorPos || px !== this._cursorPos[0] || py !== this._cursorPos[1]) {
                         this._cursorPos = [px, py];
                         this._updateCursorUniforms();
@@ -289,8 +290,6 @@ export default class RingLightExtension extends Extension {
             this._v4l2PollId = 0;
         }
         this._settings.disconnect(this._settingsChangedId);
-        this._settings.disconnect(this._modeChangedId);
-        this._settings.disconnect(this._quickSettingsChangedId);
         if (this._cameraMonitor) {
             this._cameraMonitor.disconnect(this._cameraChangedId);
             this._cameraMonitor = null;
@@ -541,7 +540,7 @@ export default class RingLightExtension extends Extension {
         this._scale = scale;
         if (!this._cursorPos) {
             try {
-                this._cursorPos = global.display.get_pointer_info().get_position();
+                this._cursorPos = global.get_pointer();
             } catch (e) {
                 this._cursorPos = null; // hole appears at first motion event
             }

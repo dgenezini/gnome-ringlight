@@ -16,6 +16,9 @@ try {
         await import('resource:///org/gnome/shell/extensions/prefs.js'));
 }
 
+// display-global CSS for the temperature slider track; added once per process
+let cssAdded = false;
+
 export default class RingLightPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
@@ -73,8 +76,13 @@ export default class RingLightPreferences extends ExtensionPreferences {
         scale.ringlight-scale trough highlight {
             background: transparent; /* kill the accent-blue fill covering the left of the ramp */
         }`);
-        Gtk.StyleContext.add_provider_for_display(tempScale.get_display(), tempCss,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
+        // provider is display-global; add once per process so repeated window
+        // opens don't accumulate providers
+        if (!cssAdded) {
+            Gtk.StyleContext.add_provider_for_display(tempScale.get_display(), tempCss,
+                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
+            cssAdded = true;
+        }
         tempBox.append(tempScale);
         tempRow.child = tempBox;
 
@@ -100,7 +108,7 @@ export default class RingLightPreferences extends ExtensionPreferences {
         });
         settings.bind('show-quick-settings-toggle', quickSettingsRow, 'active', Gio.SettingsBindFlags.DEFAULT);
 
-        const monitors = Gdk.Display.get_default()?.get_monitors();
+        const monitors = Gdk.Display.get_default()?.get_monitors(); // GListModel; only monitor API in GTK 4 (45–50)
         for (let i = 0; monitors && i < monitors.get_n_items(); i++) {
             const connector = monitors.get_item(i).get_connector();
             if (!connector) {
