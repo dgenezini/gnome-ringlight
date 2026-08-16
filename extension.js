@@ -196,8 +196,12 @@ const RING_MODES = {
 export default class RingLightExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
-        this._settingsChangedId = this._settings.connect('changed', () => {
-            if (this._active)
+        this._settingsChangedId = this._settings.connect('changed', (_settings, key) => {
+            if (!this._active)
+                return;
+            if (key === 'excluded-monitors')
+                this._build();
+            else
                 this._applySettings();
         });
         this._borders = [];
@@ -500,6 +504,22 @@ export default class RingLightExtension extends Extension {
         return false;
     }
 
+    _monitorConnector(layoutMonitor) {
+        try {
+            const connector = global.display.get_monitor_name?.(layoutMonitor.index);
+            if (connector)
+                return connector;
+            const monitor = global.backend.get_monitor_manager()
+                .get_monitors()[layoutMonitor.index];
+            const name = monitor?.get_connector();
+            if (name)
+                return name;
+        } catch (e) {
+        }
+        console.warn(`Ring Light: no connector identity for monitor ${layoutMonitor.index}; keeping it enabled`);
+        return null;
+    }
+
     _build() {
         for (const a of this._borders)
             Main.layoutManager.removeChrome(a);
@@ -528,10 +548,14 @@ export default class RingLightExtension extends Extension {
         }
 
         const baseline = [];
+        const excluded = this._settings.get_strv('excluded-monitors');
         for (const m of Main.layoutManager.monitors) {
             // monitors can be transiently undefined while layout changes
             // (login, hotplug) — skip instead of crashing mid-build
             if (!m)
+                continue;
+            const connector = this._monitorConnector(m);
+            if (connector && excluded.includes(connector))
                 continue;
             // mutter 18 dropped Meta.Monitor.geometry; the layout manager
             // Monitor objects now expose x/y/width/height directly
