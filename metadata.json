@@ -4,7 +4,7 @@
   "uuid": "ringlight@danielgenezini",
   "url": "https://github.com/dgenezini/gnome-ringlight",
   "settings-schema": "org.gnome.shell.extensions.ringlight",
-  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "shell-version": ["46", "47", "48", "49", "50"],
   "version": 2,
   "version-name": "1.0.0"
 }

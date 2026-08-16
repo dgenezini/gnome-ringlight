@@ -103,3 +103,41 @@ test('temperatureToRGB: output clamped to 0-255 and monotonic across range', () 
         assert.ok(samples[i][1][2] >= samples[i - 1][1][2], 'blue must not decrease with temperature');
     }
 });
+
+test('temperatureToRGB: piecewise blue branches at their boundaries', () => {
+    assert.equal(temperatureToRGB(1900)[2], 0, 'blue forced to 0 at t<=19 (1900 K)');
+    assert.equal(temperatureToRGB(1899)[2], 0, 'blue stays 0 below 1900 K');
+    assert.equal(temperatureToRGB(6600)[2], 255, 'blue forced to 255 at t>=66 (6600 K)');
+    assert.equal(temperatureToRGB(7000)[2], 255, 'blue stays 255 past 6600 K');
+    assert.ok(temperatureToRGB(6600)[2] > temperatureToRGB(6500)[2],
+        'blue jumps up at the 6600 K boundary');
+});
+
+const ringVisible = eval(`(${extractFunction(read('extension.js'), 'ringVisible')})`);
+
+test('ringVisible truth table: off never, always always, auto follows camera', () => {
+    assert.equal(ringVisible('off', true), false);
+    assert.equal(ringVisible('off', false), false);
+    assert.equal(ringVisible('always', true), true);
+    assert.equal(ringVisible('always', false), true);
+    assert.equal(ringVisible('auto', true), true);
+    assert.equal(ringVisible('auto', false), false);
+});
+
+test('schema ring-mode default is a known RING_MODES key', () => {
+    const modes = eval(`(${read('extension.js').match(/const RING_MODES = (\{[^}]+\})/)[1]})`);
+    const def = read(SCHEMA_XML).match(/<key name="ring-mode"[\s\S]*?<default>'([^']+)'/)[1];
+    assert.ok(def in modes,
+        `schema default ring-mode '${def}' missing from RING_MODES in extension.js`);
+});
+
+test('prefs slider bounds match schema ranges', () => {
+    // bounds are duplicated: Gtk.Adjustment lower/upper in prefs.js, <range> in
+    // the gschema XML. Drift = UI lets the user pick a value the schema rejects.
+    const bounds = s => [...s.matchAll(/lower: (\d+),\s*upper: (\d+)/g)]
+        .map(m => `${m[1]},${m[2]}`).sort();
+    const ranges = s => [...s.matchAll(/<range min="(\d+)" max="(\d+)"/g)]
+        .map(m => `${m[1]},${m[2]}`).sort();
+    assert.deepEqual(bounds(read('prefs.js')), ranges(read(SCHEMA_XML)),
+        'prefs slider bounds and gschema ranges drifted apart — update both');
+});

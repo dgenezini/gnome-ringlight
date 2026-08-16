@@ -135,7 +135,7 @@ export default class RingLightPreferences extends ExtensionPreferences {
             subtitle: 'Rounded ring corners; inner corner radius is this minus the ring width. 0 = sharp corners',
             adjustment: new Gtk.Adjustment({
                 lower: 0,
-                upper: 1000,
+                upper: 200,
                 step_increment: 10,
             }),
         });

@@ -66,7 +66,7 @@ Bugs reported and fixed across the project's OpenCode session history (55 sessio
 | Wrong font size/margin | `title-4` = libadwaita heading font | Plain label, body size |
 | Left/right margins missing vs other rows | Rows inset content `margin-left/right: 6px` | Match SpinRow inset |
 | Per-monitor switches would crash on every GNOME 45–50 | Stash "fix" swapped `get_monitors()` GListModel for `Gdk.Display.get_n_monitors()`/`get_monitor(i)` — those were removed in GTK 4.0 and never re-added; GListModel is the only monitor API | Kept `get_monitors()` + `get_n_items()`/`get_item()` (verified against GTK 4.12 header and GNOME 50 typelib) |
-| `ring-radius` had no `<range>` in gschema while prefs SpinRow allowed 0–1000 | Schema and prefs bounds duplicated by hand, no link between them | Added `<range min="0" max="200"/>`, recompiled binary; new test asserts prefs Adjustment bounds match schema ranges |
+| `ring-radius` had no `<range>` in gschema while prefs SpinRow allowed 200 | Schema and prefs bounds duplicated by hand, no link between them | Added `<range min="0" max="200"/>`, recompiled binary; new test asserts prefs Adjustment bounds match schema ranges |
 
 ## Misc
 
