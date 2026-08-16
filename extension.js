@@ -345,7 +345,7 @@ export default class RingLightExtension extends Extension {
             this._modeItems[mode] = item;
         }
         toggle.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        toggle.menu.addAction('Ring Sight Settings', () => {
+        toggle.menu.addAction('Ring Light Settings', () => {
             toggle.menu.close();
             this.openPreferences();
         });
