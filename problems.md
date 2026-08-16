@@ -52,6 +52,7 @@ Bugs reported and fixed across the project's OpenCode session history (55 sessio
 | Hole not hidden when cursor leaves ring | Gate only checked "outside inner rect" — true even where ring is invisible (edges, top bar, faint outer ramp) | Gate hole on ring's actual alpha under cursor |
 | Hole freezes over app windows | Stage `motion-event` stops firing over app windows (compositor routes motion to app) → stale `_cursorPos`; desktop worked because stage still got events | Poll global pointer (mutter tracks it) as fallback |
 | Worked, then stopped | Stale module / rebuild loops / motion death at band edges | Same fixes: relogin, no-rebuild, pointer poll + alpha gating |
+| Shell loop GC churn while ring active | `vfunc_paint_target` allocated a fresh `GObject.Value` per uniform per paint per monitor per frame (~20 allocs × 60 fps × monitors) | Cache one GValue per uniform + the int tex GValue; `set_uniform_value` copies, so reuse each paint; cursor uniforms mutated in place + `queue_redraw` |
 
 ## Prefs UI
 

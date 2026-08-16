@@ -155,17 +155,24 @@ class RingShaderEffect extends Clutter.ShaderEffect {
     _init(uniforms) {
         super._init({shader_type: Cogl.ShaderType.FRAGMENT});
         this._uniforms = uniforms;
+        // one GValue per uniform, reused every paint: set_uniform_value
+        // copies the value, so no per-frame allocation on the shell loop
+        this._uniformValues = {}; // uniform name → GValue (lazily created)
+        this._texValue = new GObject.Value();
+        this._texValue.init(GObject.TYPE_INT);
+        this._texValue.set_int(0);
         this.set_shader_source(RING_SHADER);
     }
 
     vfunc_paint_target(node, paintContext) {
-        const texture = new GObject.Value();
-        texture.init(GObject.TYPE_INT);
-        texture.set_int(0);
-        this.set_uniform_value('tex', texture);
+        this.set_uniform_value('tex', this._texValue);
         for (const [name, number] of Object.entries(this._uniforms)) {
-            const value = new GObject.Value();
-            value.init(GObject.TYPE_FLOAT);
+            let value = this._uniformValues[name];
+            if (!value) {
+                value = new GObject.Value();
+                value.init(GObject.TYPE_FLOAT);
+                this._uniformValues[name] = value;
+            }
             value.set_float(number);
             this.set_uniform_value(name, value);
         }
@@ -651,23 +658,20 @@ export default class RingLightExtension extends Extension {
     }
 
     // cursor hole uniforms: pointer position is ring-local (the shader
-    // samples texture space) and scaled like u_width/u_height
+    // samples texture space) and scaled like u_width/u_height. Pushed into
+    // the effect's uniform dict; applied at next paint by vfunc_paint_target
     _updateCursorUniforms() {
         if (!this._cursorPos || this._rings.length === 0)
             return;
         const [cx, cy] = this._cursorPos;
         for (const {widget, effect} of this._rings) {
-            this._setFloatUniform(effect, 'u_mouse_x', (cx - widget.x) * this._scale);
-            this._setFloatUniform(effect, 'u_mouse_y', (cy - widget.y) * this._scale);
-            this._setFloatUniform(effect, 'u_cursor_radius', this._cursorUniforms.radius);
-            this._setFloatUniform(effect, 'u_cursor_fade', this._cursorUniforms.fade);
+            Object.assign(effect._uniforms, {
+                u_mouse_x: (cx - widget.x) * this._scale,
+                u_mouse_y: (cy - widget.y) * this._scale,
+                u_cursor_radius: this._cursorUniforms.radius,
+                u_cursor_fade: this._cursorUniforms.fade,
+            });
+            widget.queue_redraw();
         }
-    }
-
-    _setFloatUniform(effect, name, number) {
-        const value = new GObject.Value();
-        value.init(GObject.TYPE_FLOAT);
-        value.set_float(number);
-        effect.set_uniform_value(name, value);
     }
 }

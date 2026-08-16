@@ -28,5 +28,5 @@ Code must run across `metadata.json` `shell-version` range. Two known dances, ke
 
 ## Workflow
 
-- Features go through OpenSpec: `openspec/` holds specs + archived changes; commands `/opsx-propose`, `/opsx-apply`, `/opsx-update`, `/opsx-archive` (definitions in `.opencode/commands/`). Specs in `openspec/specs/` are the source of truth — keep implementation in sync.
+- Features go through OpenSpec: `openspec/` holds specs + archived changes; commands `/opsx-propose`, `/opsx-apply`, `/opsx-update`, `/opsx-archive` (definitions in `.opencode/commands/`). Specs in `openspec/specs/` describe shipped state — code is authoritative. If implementation diverges, update the specs (or the change's delta specs before syncing), don't chase specs.
 - Docs: `README.md` for users, `problems.md` for the bugs-and-fixes log (grouped by subsystem; add every fixed bug there), commit history. Conventional commit-ish messages, e.g. "Toggle ringlight in camera toggle".
