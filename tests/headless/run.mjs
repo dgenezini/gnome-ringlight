@@ -8,7 +8,7 @@
 // repo as the extension, and drives it over D-Bus:
 //   - org.gnome.Shell.Extensions: GetExtensionErrors
 //   - org.gnome.Shell.Eval: in-shell state assertions (ring widgets, struts,
-//     work areas, shader uniforms)
+//     work areas, shader uniforms, camera gating, quick-settings toggle)
 //   - gsettings (session bus): settings round-trip
 //   - org.gnome.Mutter.DisplayConfig: monitor layout change attempt (skipped
 //     on headless backends that reject/block layout changes)
@@ -206,6 +206,21 @@ function workAreaBaselineExpr() {
     })()`;
 }
 
+// shader uniforms of the first ring + the global scale factor, so radius
+// assertions don't assume scale 1
+const RING_UNIFORMS = `(() => {
+    const e = ${EXT_LOOKUP};
+    const u = e?._rings?.[0]?.effect._uniforms ?? {};
+    return JSON.stringify({
+        temp: u.u_temperature,
+        brightness: u.u_brightness,
+        innerRadius: u.u_inner_radius,
+        outerRadius: u.u_outer_radius,
+        cursorRadius: u.u_cursor_radius,
+        scale: imports.gi.St.ThemeContext.get_for_stage(global.stage).scale_factor,
+    });
+})()`;
+
 async function scenarioEnable() {
     // ring was seeded off; flip it on through the same settings path users use
     const r = gsettings(['set', 'org.gnome.shell.extensions.ringlight', 'ring-mode', 'always']);
@@ -248,14 +263,19 @@ async function scenarioSettings() {
             throw new Error(`gsettings set ${key} failed: ${r.stderr}`);
     }
     await waitFor(() => {
-        const s = evalShell(`(() => {
-            const e = ${EXT_LOOKUP};
-            const u = e?._rings?.[0]?.effect._uniforms ?? {};
-            return JSON.stringify({temp: u.u_temperature, brightness: u.u_brightness,
-                radius: u.u_inner_radius, cursorRadius: u.u_cursor_radius});
-        })()`);
-        return s.temp === 4000 && Math.abs(s.brightness - 0.5) < 1e-9 && s.cursorRadius > 0;
+        const s = evalShell(RING_UNIFORMS);
+        return s.temp === 4000 && Math.abs(s.brightness - 0.5) < 1e-9 && s.cursorRadius > 0 &&
+            s.outerRadius === 60 * s.scale &&
+            s.innerRadius === Math.max(0, 60 - LIGHT_W) * s.scale;
     }, 'settings applied to shader uniforms');
+
+    // cursor-radius 0 must disable the pointer hole entirely
+    const r0 = gsettings(['set', 'org.gnome.shell.extensions.ringlight', 'cursor-radius', '0']);
+    if (r0.status !== 0)
+        throw new Error(`gsettings set cursor-radius failed: ${r0.stderr}`);
+    await waitFor(() => evalShell(RING_UNIFORMS).cursorRadius === 0,
+        'cursor-radius 0 disables the hole');
+
     const errs = extensionErrors(extensionsPath());
     if (errs.length > 0)
         throw new Error(`extension reports errors after settings change: ${errs.join('; ')}`);
@@ -275,6 +295,144 @@ async function scenarioDisable(baseline) {
             wa[0] === baseline[i][0] && wa[1] === baseline[i][1] &&
             wa[2] === baseline[i][2] && wa[3] === baseline[i][3]);
     }, 'work area restored after disable');
+}
+
+// ring-mode 'auto' gates on camera state. Headless has no real cameras, so
+// drive _cameraInUse directly and watch the ring follow _refresh(); the v4l2
+// poll is silenced by dropping the monitor so it can't flip the flag back
+// every 2s mid-test.
+async function scenarioCameraAuto(baseline) {
+    evalShell(`(() => {
+        const e = ${EXT_LOOKUP};
+        e._cameraMonitor = null; // poll would force _cameraInUse=false every 2s
+        e._cameraInUse = false;
+        e._refresh();
+        return true;
+    })()`);
+    const r = gsettings(['set', 'org.gnome.shell.extensions.ringlight', 'ring-mode', 'auto']);
+    if (r.status !== 0)
+        throw new Error(`gsettings set ring-mode auto failed: ${r.stderr}`);
+    await waitFor(() => {
+        const s = evalShell(ringStateExpr());
+        return s.rings === 0 && !s.active &&
+            s.workAreas.every((wa, i) => wa[0] === baseline[i][0] && wa[1] === baseline[i][1] &&
+                wa[2] === baseline[i][2] && wa[3] === baseline[i][3]);
+    }, 'auto + no camera: no ring, work area untouched');
+
+    evalShell(`(() => {
+        const e = ${EXT_LOOKUP};
+        e._cameraInUse = true;
+        e._refresh();
+        return true;
+    })()`);
+    await waitFor(() => {
+        const s = evalShell(ringStateExpr());
+        return s.rings === MONITORS.length && s.active &&
+            s.workAreas.every((wa, i) =>
+                wa[0] === baseline[i][0] + LIGHT_W && wa[1] === baseline[i][1] + LIGHT_W &&
+                wa[2] === baseline[i][2] - 2 * LIGHT_W && wa[3] === baseline[i][3] - 2 * LIGHT_W);
+    }, 'auto + camera in use: ring on, work area shrunk');
+
+    evalShell(`(() => {
+        const e = ${EXT_LOOKUP};
+        e._cameraInUse = false;
+        e._refresh();
+        return true;
+    })()`);
+    await waitFor(() => {
+        const s = evalShell(ringStateExpr());
+        return s.rings === 0 && !s.active &&
+            s.workAreas.every((wa, i) => wa[0] === baseline[i][0] && wa[1] === baseline[i][1] &&
+                wa[2] === baseline[i][2] && wa[3] === baseline[i][3]);
+    }, 'auto + camera released: ring off, work area restored');
+    const errs = extensionErrors(extensionsPath());
+    if (errs.length > 0)
+        throw new Error(`extension reports errors after auto-mode toggling: ${errs.join('; ')}`);
+}
+
+async function scenarioExcludedMonitors() {
+    const r = gsettings(['set', 'org.gnome.shell.extensions.ringlight', 'ring-mode', 'always']);
+    if (r.status !== 0)
+        throw new Error(`gsettings set ring-mode always failed: ${r.stderr}`);
+    await waitFor(() => evalShell(ringStateExpr()).rings === MONITORS.length,
+        'ring back for excluded-monitors test');
+
+    // connector names are backend-specific (headless virtual monitors); read
+    // them through the extension's own lookup so the test works anywhere
+    const s = evalShell(`(() => {
+        const e = ${EXT_LOOKUP};
+        return JSON.stringify({
+            conns: Main.layoutManager.monitors.map(m => e._monitorConnector(m)),
+        });
+    })()`);
+    if (s.conns.some(c => !c)) {
+        skip('excluded-monitors', `connector lookup unavailable: ${JSON.stringify(s.conns)}`);
+        return;
+    }
+    const target = s.conns[1]; // drop the 800x600 monitor
+
+    const setExcluded = v => {
+        const r2 = gsettings(['set', 'org.gnome.shell.extensions.ringlight', 'excluded-monitors', v]);
+        if (r2.status !== 0)
+            throw new Error(`gsettings set excluded-monitors failed: ${r2.stderr}`);
+    };
+
+    setExcluded(`['${target}']`);
+    await waitFor(() => evalShell(ringStateExpr()).rings === MONITORS.length - 1,
+        'ring dropped on the excluded connector');
+
+    setExcluded('[]');
+    await waitFor(() => evalShell(ringStateExpr()).rings === MONITORS.length,
+        'ring restored after clearing exclusion');
+
+    // unknown connector name must be ignored, not crash or drop everything
+    setExcluded("['BOGUS-CONNECTOR']");
+    await waitFor(() => evalShell(ringStateExpr()).rings === MONITORS.length,
+        'unknown connector name keeps every ring');
+    setExcluded('[]');
+    const errs = extensionErrors(extensionsPath());
+    if (errs.length > 0)
+        throw new Error(`extension reports errors after excluded-monitors changes: ${errs.join('; ')}`);
+}
+
+async function scenarioQuickSettings() {
+    const toggleStateExpr = `(() => {
+        const e = ${EXT_LOOKUP};
+        const qs = Main.panel.statusArea.quickSettings;
+        // qs._indicators is an St.BoxLayout (46+): the external indicator is
+        // a child actor of it. get_children() covers that shape on every
+        // supported shell version.
+        const children = qs._indicators?.get_children?.() ?? [];
+        return JSON.stringify({
+            has: !!e._toggle && !!e._indicator,
+            registered: !!e._toggle && !!e._indicator && children.includes(e._indicator),
+            modes: e._toggle ? Object.keys(e._modeItems).length : -1,
+            checked: e._toggle ? e._toggle.checked : null,
+        });
+    })()`;
+
+    // visible and registered at startup (schema default true); mode is
+    // 'always' from the exclude test, so the toggle shows enabled
+    await waitFor(() => {
+        const s = evalShell(toggleStateExpr);
+        return s.has && s.registered && s.modes === 3 && s.checked === true;
+    }, 'quick settings toggle visible, registered, 3 modes, checked');
+
+    const r = gsettings(['set', 'org.gnome.shell.extensions.ringlight', 'show-quick-settings-toggle', 'false']);
+    if (r.status !== 0)
+        throw new Error(`gsettings set show-quick-settings-toggle failed: ${r.stderr}`);
+    await waitFor(() => {
+        const s = evalShell(toggleStateExpr);
+        return !s.has && !s.registered && s.modes === -1;
+    }, 'toggle destroyed when hidden by setting');
+
+    const r2 = gsettings(['set', 'org.gnome.shell.extensions.ringlight', 'show-quick-settings-toggle', 'true']);
+    if (r2.status !== 0)
+        throw new Error(`gsettings set show-quick-settings-toggle failed: ${r2.stderr}`);
+    await waitFor(() => {
+        const s = evalShell(toggleStateExpr);
+        return s.has && s.registered && s.modes === 3;
+    }, 'toggle recreated and re-registered when shown again');
 }
 
 // Runtime monitor layout change: attempt to remove the second monitor through
@@ -444,6 +602,15 @@ async function main() {
 
         await scenarioDisable(baseline);
         result('disable', true, 'chrome removed and work area restored');
+
+        await scenarioCameraAuto(baseline);
+        result('camera-auto', true, 'auto mode follows camera state: ring on/off, work area follows');
+
+        await scenarioExcludedMonitors();
+        result('excluded-monitors', true, 'excluded connector drops its ring; unknown connector keeps all');
+
+        await scenarioQuickSettings();
+        result('quick-settings', true, 'toggle shown/hidden by setting, registered in the quick settings box');
 
         await scenarioMonitorLayoutChange();
         checkShaderErrors();
