@@ -24,7 +24,7 @@ While the ring is active and the pointer is over a ring band, the visible ring S
 - **THEN** the ring disappears around the pointer while the rest of the ring stays visible
 
 ### Requirement: Cursor hole configured by radius and fade settings
-The extension SHALL expose `cursor-radius` and `cursor-fade` GSettings keys, both integer logical pixels ranging 0–1000, defaulting to 230 and 150 respectively. `cursor-radius` SHALL default to 230 and a value of 0 SHALL disable the hole entirely (ring always fully visible). Changing either setting while the ring is active SHALL rebuild the ring with the new values immediately. The preferences window SHALL expose both keys as spin rows.
+The extension SHALL expose `cursor-radius` and `cursor-fade` GSettings keys, both integer logical pixels ranging 0–1000, defaulting to 100 and 60 respectively. `cursor-radius` SHALL default to 100 and a value of 0 SHALL disable the hole entirely (ring always fully visible). Changing either setting while the ring is active SHALL apply the new value to the active ring immediately. The preferences window SHALL expose both keys as spin rows.
 
 #### Scenario: Radius set to zero
 - **WHEN** `cursor-radius` is 0 and the ring is active with the pointer over the band
@@ -32,7 +32,7 @@ The extension SHALL expose `cursor-radius` and `cursor-fade` GSettings keys, bot
 
 #### Scenario: Radius changed while active
 - **WHEN** the user changes `cursor-radius` while the ring is active
-- **THEN** the ring rebuilds with the new radius without toggling camera state
+- **THEN** the hole updates to the new radius without toggling camera state
 
 #### Scenario: Zero fade is a hard edge
 - **WHEN** `cursor-fade` is 0 and the pointer is over the band

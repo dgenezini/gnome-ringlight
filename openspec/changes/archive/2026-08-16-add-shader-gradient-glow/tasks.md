@@ -12,4 +12,4 @@
 ## 3. Verification
 
 - [x] 3.1 Run `glib-compile-schemas schemas/` and `node --check extension.js prefs.js`.
-- [ ] 3.2 Restart GNOME Shell and manually test auto/always/off activation, monitor add/remove, disable while active, pixel and resolution width modes, rounded and zero-radius corners, brightness/softness/glow updates, and a HiDPI monitor if available.
+- [x] 3.2 Restart GNOME Shell and manually test auto/always/off activation, monitor add/remove, disable while active, pixel and resolution width modes, rounded and zero-radius corners, brightness/softness/glow updates, and a HiDPI monitor if available.

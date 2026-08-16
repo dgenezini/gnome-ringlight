@@ -18,5 +18,5 @@
 ## 3. Verify supported behavior
 
 - [x] 3.1 Run `node --check extension.js prefs.js`.
-- [ ] 3.2 Manually verify default light core/halo on dark and light wallpaper at scale factors 1 and 2, including panel/dock gaps and cursor transparency on/off.
-- [ ] 3.3 Manually verify camera on/off, monitor add/remove, and disable while active; confirm maximized/tiled work area remains strut-defined.
+- [x] 3.2 Manually verify default light core/halo on dark and light wallpaper at scale factors 1 and 2, including panel/dock gaps and cursor transparency on/off.
+- [x] 3.3 Manually verify camera on/off, monitor add/remove, and disable while active; confirm maximized/tiled work area remains strut-defined.

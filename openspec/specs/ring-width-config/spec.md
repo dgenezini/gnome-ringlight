@@ -2,39 +2,17 @@
 
 ## Purpose
 
-Configure the ring's thickness in pixels or derived from an available work area resolution. (TBD: expand)
+Ring thickness is a fixed light footprint; no width settings. (TBD: expand)
 
 ## Requirements
 
-### Requirement: Pixel width mode is default
-The ring width SHALL default to a fixed pixel width, defined by the existing `border-width` setting, applied uniformly to all four strips. Existing installs SHALL keep this behavior without reconfiguration.
+### Requirement: Ring reserves fixed light footprint
+The extension SHALL reserve, on every edge, exactly the fixed light footprint defined by the `LIGHT_W` constant (~100 logical pixels: the ~50-logical-pixel opaque core plus its glow tail), so windows sit right at the glow's edge with no dead reserved space. No width or width-mode settings exist: `ring-width`, `width-mode`, `available-width`, and `available-height` are removed and never exposed.
 
-#### Scenario: Ring built in default pixel mode
-- **WHEN** the ring activates with `width-mode` set to `pixels`
-- **THEN** all four border strips use the `border-width` setting as their thickness, on every monitor
+#### Scenario: Ring active
+- **WHEN** the extension activates
+- **THEN** every ring strut reserves the ~100-logical-pixel light footprint on its configured edge, scaled by the stage scale factor, and the glow fills the reserved band
 
-### Requirement: Width mode is selectable
-A `width-mode` setting SHALL select between `pixels` and `resolution`. The extension SHALL rebuild the ring from the current mode and settings while the ring is active, so changes apply live.
-
-#### Scenario: Mode changed while ring active
-- **WHEN** `width-mode` changes while the ring is active
-- **THEN** the ring is rebuilt using the newly selected mode
-
-#### Scenario: Mode changed while ring inactive
-- **WHEN** `width-mode` changes while no camera is in use
-- **THEN** the next activation uses the new mode
-
-### Requirement: Width derived from available resolution
-In `resolution` mode the extension SHALL compute the ring thickness per axis from the `available-width` and `available-height` settings: vertical margin `(monitor height − available height) / 2` for the top and bottom strips, horizontal margin `(monitor width − available width) / 2` for the left and right strips. Margins SHALL be rounded to whole pixels and clamped to a minimum of 1 pixel.
-
-#### Scenario: Resolution mode on a larger monitor
-- **WHEN** the ring activates in `resolution` mode on a 3840×2160 monitor with `available-width` 1920 and `available-height` 1080
-- **THEN** top and bottom strips are 540 px tall and left and right strips are 960 px wide, leaving a 1920×1080 available area
-
-#### Scenario: Resolution mode matches monitor size
-- **WHEN** `available-width` equals the monitor width
-- **THEN** the horizontal margin computes to zero and left and right strips clamp to 1 px thickness, with the ring still present on the other axis
-
-#### Scenario: Available resolution changed while ring active
-- **WHEN** `available-width` or `available-height` changes while the ring is active in `resolution` mode
-- **THEN** the ring is rebuilt with margins derived from the new values
+#### Scenario: No width controls in preferences
+- **WHEN** the user opens preferences
+- **THEN** there is no ring width, width mode, or available-resolution control; the band is fixed

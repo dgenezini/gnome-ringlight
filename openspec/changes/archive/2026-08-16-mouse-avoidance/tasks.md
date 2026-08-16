@@ -19,7 +19,7 @@
 ## 4. Verification
 
 - [x] 4.1 Syntax check: `node --check extension.js prefs.js`
-- [ ] 4.2 Manual test: hole follows cursor live, smooth edge, no hard line; cursor over ring lets clicks through; hole continuous across monitors; radius 0 disables; radius/fade changes apply live from prefs; HiDPI monitor renders hole sharp (no blurry circle)
-- [ ] 4.3 Watch `journalctl -f /usr/bin/gnome-shell` during testing; confirm no warnings (incl. no `global.get_pointer` deprecation), no shader compile errors, no perf complaints
-- [ ] 4.4 Regression: camera on/off, monitor add/remove, disable while active, fullscreen call — ring appears/disappears and struts behave as before
-- [ ] 4.5 If the hole does not follow the pointer on Wayland (stage `motion-event` not firing), add a 250 ms GLib timeout fallback that re-reads the pointer and re-updates uniforms
+- [x] 4.2 Manual test: hole follows cursor live, smooth edge, no hard line; cursor over ring lets clicks through; hole continuous across monitors; radius 0 disables; radius/fade changes apply live from prefs; HiDPI monitor renders hole sharp (no blurry circle)
+- [x] 4.3 Watch `journalctl -f /usr/bin/gnome-shell` during testing; confirm no warnings (incl. no `global.get_pointer` deprecation), no shader compile errors, no perf complaints
+- [x] 4.4 Regression: camera on/off, monitor add/remove, disable while active, fullscreen call — ring appears/disappears and struts behave as before
+- [x] 4.5 If the hole does not follow the pointer on Wayland (stage `motion-event` not firing), add a 250 ms GLib timeout fallback that re-reads the pointer and re-updates uniforms

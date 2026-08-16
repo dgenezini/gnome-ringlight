@@ -11,10 +11,6 @@ The extension SHALL render each active ring with its existing shader-based round
 - **WHEN** the ring is active over a dark background
 - **THEN** core, near halo, and far halo blend continuously with no hard alpha or color boundary
 
-#### Scenario: Ring follows configured width
-- **WHEN** the ring size configuration changes while the ring is active
-- **THEN** the core and halo geometry rebuild from the new reserved band width without a stale visual actor
-
 ### Requirement: Gradient derives from existing color
 The extension SHALL derive core color from existing `ring-color-temperature` setting without adding a color setting. At default 6500 K, core SHALL render white and halo SHALL render cool blue after the reference light. At non-default temperatures, core and halo SHALL retain configured light hue while maintaining same core-to-halo falloff profile.
 
